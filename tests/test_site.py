@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces"]  # tasks 5-7 append
+EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"runs? (dft )?simulations", r"\bGNN", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
@@ -202,7 +202,40 @@ class SiteTests(unittest.TestCase):
 
     def test_sections_in_order(self):
         ids = re.findall(r'<section[^>]*\bid="([^"]+)"', PAGE)
-        self.assertEqual(ids[:len(EXPECTED_SECTIONS)], EXPECTED_SECTIONS)
+        self.assertEqual(ids, EXPECTED_SECTIONS)
+
+    def test_mail_links(self):
+        want = {"mailto:lohgc@a-star.edu.sg?subject=MatAgent%20early%20access",
+                "mailto:lohgc@a-star.edu.sg?subject=MatAgent%20collaboration"}
+        self.assertEqual(set(re.findall(r'href="(mailto:[^"]+)"', PAGE)), want)
+
+    def test_affiliation(self):
+        aff = "A*STAR IAIC Sustainability Directorate"
+        card = re.search(r'<section[^>]*id="contact".*?<address class="ccard">(.*?)</address>', PAGE, flags=re.S)
+        self.assertTrue(card)
+        self.assertIn(aff, card.group(1))
+        self.assertIn(aff, re.search(r"<footer.*?</footer>", PAGE, flags=re.S).group(0))
+
+    def test_scroll_margin_clears_header(self):
+        # nav anchors must not land under the sticky header (min-height + 1 px border)
+        h = int(re.search(r"\.site-header \.wrap \{[^}]*min-height:\s*(\d+)px", css()).group(1)) + 1
+        m = re.search(r"section\[id\]\s*\{[^}]*scroll-margin-top:\s*(\d+)px", css())
+        self.assertTrue(m)
+        self.assertEqual(int(m.group(1)), h)
+
+    def test_color_scheme_per_theme(self):
+        self.assertNotIn("color-scheme: light dark", css())
+        self.assertIn("color-scheme: light;", _block(r":root(?!\[|:)"))
+        self.assertIn("color-scheme: dark;", _block(r':root\[data-theme="dark"\]'))
+        self.assertIn("color-scheme: dark;", _block(r':root:not\(\[data-theme="light"\]\)'))
+
+    def test_toggle_hit_area(self):
+        m = re.search(r"#theme-toggle\s*\{([^}]*)\}", css())
+        self.assertTrue(m)
+        for prop in ("min-width", "min-height"):
+            self.assertGreaterEqual(int(re.search(prop + r":\s*(\d+)px", m.group(1)).group(1)), 44, prop)
+        hdr = int(re.search(r"\.site-header \.wrap \{[^}]*min-height:\s*(\d+)px", css()).group(1))
+        self.assertGreaterEqual(hdr, 44)
 
     def test_forbidden_terms(self):
         text = visible_text(PAGE)

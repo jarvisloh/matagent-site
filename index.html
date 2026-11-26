@@ -20,6 +20,7 @@
   --node: #FFFFFF;
   --accent: #0E7F78;
   --accent-2: #9A600E;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -31,6 +32,7 @@
     --node: #101A2B;
     --accent: #4FD1C5;
     --accent-2: #F5B544;
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -42,9 +44,9 @@
   --node: #101A2B;
   --accent: #4FD1C5;
   --accent-2: #F5B544;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html { color-scheme: light dark; }
 body {
   margin: 0;
   background-color: var(--bg);
@@ -68,6 +70,8 @@ a { color: var(--accent); }
 .lk { line-height: 1.05; }
 .lk .s { display: block; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .lk .n { font-size: 21px; font-weight: 600; letter-spacing: -.025em; }
+section[id] { scroll-margin-top: 69px; }
+#theme-toggle { min-width: 44px; min-height: 44px; padding: 0; font-size: 16px; }
 .site-nav { display: flex; gap: 20px; font-size: 13.5px; white-space: nowrap; }
 .site-nav a { color: var(--muted); text-decoration: none; }
 .site-nav a:hover { color: var(--ink); }
@@ -139,7 +143,16 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
 .in .sch .node { opacity: 1; transform: none; }
 .in .sch .edge { stroke-dashoffset: 0; }
 .in .sch .dash { opacity: 1; }
-.site-footer { border-top: 1px solid var(--line); padding: 24px 0; color: var(--muted); font-size: 14px; }
+.cgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px 56px; align-items: start; }
+@media (max-width: 859px) { .cgrid { grid-template-columns: minmax(0, 1fr); } }
+.ccard { font-style: normal; background: var(--node); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 20px; font-size: 15px; line-height: 1.55; }
+.ccard p { margin: 0 0 12px; }
+.ccard .cname { font-weight: 600; font-size: 17px; letter-spacing: -.015em; margin-bottom: 4px; }
+.ccard .caddr { color: var(--muted); }
+.cmail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 14px; border-top: 1px solid var(--line); font-family: "Geist Mono", ui-monospace, monospace; font-size: 14px; overflow-wrap: anywhere; }
+.cmail .copy { font-size: 12.5px; padding: 4px 12px; }
+.site-footer { border-top: 1px solid var(--line); padding: 24px 0; color: var(--muted); font-size: 13.5px; }
+.site-footer p { margin: 0 0 4px; }
 @media (prefers-reduced-motion: reduce) {
   .particle { display: none; }
   .js .sch .node, .js .sch .edge, .js .sch .dash { transition: none; opacity: 1; transform: none; stroke-dashoffset: 0; }
@@ -429,9 +442,28 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
     </div>
   </div>
 </section>
+<section id="contact" class="sec">
+  <div class="wrap cgrid">
+    <div>
+      <p class="kicker">10</p>
+      <h2>Contact</h2>
+      <p class="lede">We are looking for research groups and companies to evaluate MatAgent.</p>
+      <div class="ctas"><a class="btn btn-primary" href="mailto:lohgc@a-star.edu.sg?subject=MatAgent%20early%20access">Request early access</a><a class="btn" href="mailto:lohgc@a-star.edu.sg?subject=MatAgent%20collaboration">Propose a collaboration</a></div>
+    </div>
+    <address class="ccard">
+      <p class="cname">Dr. Jarvis Loh</p>
+      <p>A*STAR IAIC Sustainability Directorate</p>
+      <p class="caddr">1 Fusionopolis Way<br>Singapore 138632</p>
+      <div class="cmail"><a href="mailto:lohgc@a-star.edu.sg?subject=MatAgent%20early%20access">lohgc@a-star.edu.sg</a><button type="button" class="copy" data-copy="lohgc@a-star.edu.sg">Copy</button></div>
+    </address>
+  </div>
+</section>
 </main>
 <footer class="site-footer">
-  <div class="wrap"><p>Figures are schematic.</p></div>
+  <div class="wrap">
+    <p>Developed by A*STAR IAIC Sustainability Directorate. © 2026 A*STAR. All rights reserved.</p>
+    <p>Figures are schematic. MatAgent runs as a single-workspace tool on a workstation or a private network.</p>
+  </div>
 </footer>
 <script>
 (function () {
@@ -446,6 +478,11 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
     show();
   });
   show();
+  document.querySelectorAll(".copy").forEach(function (b) {
+    b.addEventListener("click", function () {
+      try { navigator.clipboard.writeText(b.dataset.copy).then(function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 1600); }); } catch (e) {}
+    });
+  });
 
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var timers = new Map();
