@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import unittest
@@ -108,9 +109,17 @@ class SiteTests(unittest.TestCase):
         self.assertRegex(PAGE, r'<button[^>]*id="theme-toggle"[^>]*aria-pressed=')
 
     def test_external_hosts(self):
-        for url in re.findall(r'(?:src|href)="(https?://[^"]+)"', PAGE):
+        scripts = "\n".join(re.findall(r"<script[^>]*>(.*?)</script>", PAGE, flags=re.S))
+        urls = re.findall(r'(?:src|href)="(https?://[^"]+)"', PAGE)
+        urls += re.findall(r"""url\(\s*['"]?(https?://[^'")\s]+)""", css())
+        urls += re.findall(r"""@import\s+(?:url\(\s*)?['"]?(https?://[^'")\s;]+)""", css())
+        urls += re.findall(r"""fetch\(\s*['"`]?(https?://[^'"`)\s]+)""", scripts)
+        for url in urls:
             self.assertIn(re.match(r"https?://([^/]+)", url).group(1),
                           {"fonts.googleapis.com", "fonts.gstatic.com"}, url)
+        # any fetch() at all must target a literal allowed URL, never a computed one
+        self.assertEqual(len(re.findall(r"\bfetch\(", scripts)),
+                         len(re.findall(r"""fetch\(\s*['"`]https?://""", scripts)))
 
     def test_font_fallbacks(self):
         fams = re.findall(r"font-family:\s*([^;}]+)", css())
@@ -146,7 +155,7 @@ class SiteTests(unittest.TestCase):
         self.assertIsNone(re.search(r"Newsreader|\bInter\b|JetBrains", PAGE))
 
     def test_brand_assets_verbatim(self):
-        repo = "/Users/jarvisloh/PycharmProjects/CATAGENT"
+        repo = os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))
         if not Path(repo).exists():
             self.skipTest("CATAGENT repo not present")
         for dst, src in (("assets/matagent-mark.svg", "frontend/src/assets/catagent-mark.svg"),
@@ -292,6 +301,64 @@ class SiteTests(unittest.TestCase):
             self.assertTrue(m, tag)
             for cid in m.group(1).split():
                 self.assertIn(known.get(cid), ("confirmed", "changed"), cid)
+
+    def test_idx_full_opacity(self):
+        # .idx is muted text; any opacity below 1 drops it under 4.5:1
+        m = re.search(r"\.sch \.idx\s*\{([^}]*)\}", css())
+        self.assertTrue(m)
+        op = re.search(r"opacity:\s*([\d.]+)", m.group(1))
+        self.assertTrue(op is None or float(op.group(1)) >= 1, m.group(1))
+
+    def test_sublabel_length(self):
+        import html
+        for svg in re.findall(r"<svg\b[^>]*class=\"sch [^\"]*\".*?</svg>", PAGE, flags=re.S):
+            for t in re.findall(r'<text class="sub"[^>]*>(.*?)</text>', svg, flags=re.S):
+                self.assertLessEqual(len(html.unescape(re.sub(r"<[^>]+>", "", t))), 22, t)
+
+    def test_reveal_viewport_based(self):
+        # a figure taller than the viewport can never reach a figure-fraction threshold
+        script = re.findall(r"<script>(.*?)</script>", PAGE, flags=re.S)[-1]
+        opts = re.search(r"new IntersectionObserver\(.*\},\s*(\{[^}]*\})\s*\)", script, flags=re.S)
+        self.assertTrue(opts)
+        th = re.search(r"threshold:\s*([\d.]+)", opts.group(1))
+        self.assertTrue(th is None or float(th.group(1)) == 0, opts.group(1))
+        self.assertRegex(opts.group(1), r'rootMargin:\s*"0px 0px -\d+% 0px"')
+        self.assertEqual(script.count("new IntersectionObserver"), 1)
+
+    def test_narrow_fig_cap(self):
+        m = re.search(r"\.fig \.narrow \{ display: block; max-width: (\d+)px", css())
+        self.assertTrue(m)
+        self.assertLessEqual(int(m.group(1)), 420)
+
+    def test_opening_plain_language(self):
+        fig = re.search(r'<figure class="fig" data-fig="opening">.*?</figure>', PAGE, flags=re.S).group(0)
+        shown = " ".join(re.findall(r'<text class="(?:sub|ttl)"[^>]*>(.*?)</text>', fig))
+        shown += " " + re.search(r"<figcaption>(.*?)</figcaption>", fig, flags=re.S).group(1)
+        self.assertNotRegex(shown, r"\b(LCA|HF|PLAN|CDTP)\b|\d\.\d|[Vv]alidation")
+        self.assertRegex(fig, r'aria-label="[^"]*LCA 5\.1[^"]*HF 8\.3')
+
+    def test_header_cta_breakpoint(self):
+        m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
+        self.assertTrue(m)
+        self.assertGreaterEqual(int(m.group(1)), 500)
+
+    def test_percent_thin_space(self):
+        text = visible_text(PAGE)
+        self.assertIsNone(re.search(r"\d[ \u00a0]%", text))
+        self.assertNotIn("single-workspace", text)
+
+    def test_copy_button(self):
+        self.assertRegex(css(), r"html:not\(\.js\) \.copy\s*\{[^}]*display:\s*none")
+        self.assertRegex(PAGE, r'<span[^>]*aria-live="polite"')
+        script = re.findall(r"<script>(.*?)</script>", PAGE, flags=re.S)[-1]
+        self.assertRegex(script, r"writeText\([^;]*\)\.then\([\s\S]*?\.catch\(|writeText\([^;]*\)\.then\(\s*function[^)]*\)[^,]*,")
+        self.assertIn("Copy failed", script)
+
+    def test_domain_wording(self):
+        text = visible_text(PAGE)
+        self.assertNotIn("MatPlat adapters", text)
+        self.assertNotIn("CatPlat catalyst database", text)
+        self.assertIn("composition sum ≤", text)
 
 
 if __name__ == "__main__":
