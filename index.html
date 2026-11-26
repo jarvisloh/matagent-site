@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("matagent-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>MatAgent · Research agent for materials science</title>
+<meta name="description" content="MatAgent is a research agent for materials science: it reads the literature, identifies missing data and formulates hypotheses screened by chemical-validity checks. Every run is recorded for review.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F6F8FB;
+  --dot: #D5DDE8;
+  --ink: #0B1220;
+  --muted: #4B5970;
+  --line: #C3CEDC;
+  --node: #FFFFFF;
+  --accent: #0E7F78;
+  --accent-2: #9A600E;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A0F1A;
+    --dot: #1A2538;
+    --ink: #E6EDF5;
+    --muted: #8A97AB;
+    --line: #24324A;
+    --node: #101A2B;
+    --accent: #4FD1C5;
+    --accent-2: #F5B544;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A0F1A;
+  --dot: #1A2538;
+  --ink: #E6EDF5;
+  --muted: #8A97AB;
+  --line: #24324A;
+  --node: #101A2B;
+  --accent: #4FD1C5;
+  --accent-2: #F5B544;
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+  color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+h1, h2, h3 { font-family: "Newsreader", Georgia, serif; font-weight: 500; line-height: 1.2; }
+.method, .kicker, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+a { color: var(--accent); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.site-header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+.site-header .wrap { display: flex; align-items: center; gap: 16px; min-height: 56px; }
+.brand { display: flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-family: "Newsreader", Georgia, serif; font-size: 20px; margin-right: auto; }
+.brand img { width: 28px; height: 28px; }
+.site-nav { display: flex; gap: 16px; font-size: 14px; }
+.site-nav a { color: var(--muted); text-decoration: none; }
+.site-nav a:hover { color: var(--ink); }
+@media (max-width: 979px) { .site-nav { display: none; } }
+button, .btn { font: inherit; font-size: 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--node); color: var(--ink); padding: 6px 12px; cursor: pointer; text-decoration: none; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.sec { padding: 64px 0; }
+.card { background: var(--node); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.fig .narrow { display: none; }
+@media (max-width: 719px) { .fig .wide { display: none; } .fig .narrow { display: block; } }
+.site-footer { border-top: 1px solid var(--line); padding: 24px 0; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) {
+  .particle { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/matagent-mark.svg" alt="">MatAgent</a>
+    <nav class="site-nav" aria-label="Sections">
+      <a href="#literature">Literature</a><a href="#gaps">Gaps</a><a href="#hypotheses">Hypotheses</a><a href="#planning">Planning</a><a href="#domains">Domains</a><a href="#record">Record</a><a href="#improve">Improve</a><a href="#data">Data</a>
+    </nav>
+    <button id="theme-toggle" type="button" aria-pressed="false" aria-label="Toggle dark theme">☾</button>
+    <a class="btn btn-primary" href="mailto:lohgc@a-star.edu.sg?subject=MatAgent%20early%20access">Request early access</a>
+  </div>
+</header>
+<main id="top"></main>
+<footer class="site-footer">
+  <div class="wrap"><p>Figures are schematic.</p></div>
+</footer>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme-toggle");
+  var mq = window.matchMedia("(prefers-color-scheme: dark)");
+  function current() { return root.dataset.theme || (mq.matches ? "dark" : "light"); }
+  function show() { var d = current() === "dark"; btn.textContent = d ? "☀" : "☾"; btn.setAttribute("aria-pressed", d); }
+  btn.addEventListener("click", function () {
+    var next = current() === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    try { localStorage.setItem("matagent-theme", next); } catch (e) {}
+    show();
+  });
+  show();
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.addEventListener("DOMContentLoaded", function () {
+    var svgs = document.querySelectorAll(".fig svg");
+    svgs.forEach(function (s) { if (s.pauseAnimations) s.pauseAnimations(); });
+    if (reduce || !("IntersectionObserver" in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var s = e.target;
+        if (e.isIntersecting) s.unpauseAnimations(); else s.pauseAnimations();
+      });
+    }, { threshold: 0.25 });
+    svgs.forEach(function (s) { io.observe(s); });
+  });
+})();
+</script>
+</body>
+</html>
