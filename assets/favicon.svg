@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="MatAgent favicon: cubic unit cell on a rounded square">
-  <rect width="32" height="32" rx="7" fill="#0A0F1A"/>
-  <g fill="none" stroke="#4FD1C5" stroke-width="1.6" stroke-linejoin="round" transform="translate(1.5 3) scale(0.9)"><path d="M8 12h14v14H8z M8 12l5-5h14l-5 5 M27 7v14l-5 5 M13 7v14h14 M13 21l-5 5"/></g>
-  <g fill="#4FD1C5" transform="translate(1.5 3) scale(0.9)"><circle cx="8" cy="12" r="2"/><circle cx="22" cy="12" r="2"/><circle cx="8" cy="26" r="2"/><circle cx="22" cy="26" r="2"/><circle cx="13" cy="7" r="2"/><circle cx="27" cy="7" r="2"/><circle cx="27" cy="21" r="2"/><circle cx="13" cy="21" r="2"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MatAgent: the CatAgent silhouette on a violet tile, with a three-atom
+       lattice in place of the single active site. -->
+  <rect width="64" height="64" rx="14" fill="#2A2350"/>
+  <path d="M15 38 L20 30 L17.5 11 L29 22.5 L35 22.5 L46.5 11 L44 30 L49 38 L40.5 52 L23.5 52 Z" stroke="#F7F1E3" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M32 33 L27.5 41.5 L36.5 41.5 Z" stroke="#5ED3B0" stroke-width="2" stroke-linejoin="round" fill="none"/>
+  <circle cx="32" cy="33" r="3.2" fill="#5ED3B0"/><circle cx="27.5" cy="41.5" r="3.2" fill="#5ED3B0"/><circle cx="36.5" cy="41.5" r="3.2" fill="#5ED3B0"/>
 </svg>

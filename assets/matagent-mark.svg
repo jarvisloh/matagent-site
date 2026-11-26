@@ -1,4 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="MatAgent mark: a cubic unit cell with an atom at each corner" fill="none" stroke="#0E7F78" stroke-width="1.6" stroke-linejoin="round">
-  <path d="M8 12h14v14H8z M8 12l5-5h14l-5 5 M27 7v14l-5 5 M13 7v14h14 M13 21l-5 5"/>
-  <g fill="#0E7F78" stroke="none"><circle cx="8" cy="12" r="2"/><circle cx="22" cy="12" r="2"/><circle cx="8" cy="26" r="2"/><circle cx="22" cy="26" r="2"/><circle cx="13" cy="7" r="2"/><circle cx="27" cy="7" r="2"/><circle cx="27" cy="21" r="2"/><circle cx="13" cy="21" r="2"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CatAgent">
+  <!-- CatAgent mark: a hexagonal ring (catalyst lattice / aromatic ring) whose
+       upper edges rise into cat ears, with the agent as the amber active site. -->
+  <defs>
+    <linearGradient id="catagent-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16384D"/>
+      <stop offset="1" stop-color="#0B2232"/>
+    </linearGradient>
+    <radialGradient id="catagent-site">
+      <stop offset="0" stop-color="#F6B24A" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#F6B24A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#catagent-tile)"/>
+  <path d="M17 37 L21 30 L19 14 L29 24 L35 24 L45 14 L43 30 L47 37 L39.5 50 L24.5 50 Z"
+        stroke="#F7F1E3" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="32" cy="37.5" r="9" fill="url(#catagent-site)"/>
+  <circle cx="32" cy="37.5" r="4" fill="#F6B24A"/>
 </svg>

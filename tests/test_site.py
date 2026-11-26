@@ -1,4 +1,5 @@
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -137,6 +138,33 @@ class SiteTests(unittest.TestCase):
         for fig in re.findall(r'<figure class="fig".*?</figure>', PAGE, flags=re.S):
             self.assertEqual(len(re.findall(r'<svg[^>]*class="wide"', fig)), 1)
             self.assertEqual(len(re.findall(r'<svg[^>]*class="narrow"', fig)), 1)
+
+    def test_font_families_geist_only(self):
+        for f in re.findall(r"font-family:\s*([^;}]+)", css()):
+            first = f.split(",")[0].strip().strip("\"'")
+            self.assertIn(first, ("Geist", "Geist Mono", "inherit"), f)
+        self.assertIsNone(re.search(r"Newsreader|\bInter\b|JetBrains", PAGE))
+
+    def test_brand_assets_verbatim(self):
+        repo = "/Users/jarvisloh/PycharmProjects/CATAGENT"
+        if not Path(repo).exists():
+            self.skipTest("CATAGENT repo not present")
+        for dst, src in (("assets/matagent-mark.svg", "frontend/src/assets/catagent-mark.svg"),
+                         ("assets/favicon.svg", "frontend/public/matagent-favicon.svg")):
+            want = subprocess.run(["git", "-C", repo, "show", "bc983737:" + src],
+                                  capture_output=True, check=True).stdout
+            self.assertEqual((ROOT / dst).read_bytes(), want, dst)
+
+    def test_no_bare_svg_selector(self):
+        for sel in re.findall(r"([^{}]+)\{", re.sub(r"/\*.*?\*/", "", css(), flags=re.S)):
+            self.assertNotEqual(sel.strip(), "svg")
+            self.assertNotIn("svg", [x.strip() for x in sel.split(",")])
+
+    def test_header_lockup(self):
+        h = re.search(r"<header.*?</header>", PAGE, flags=re.S).group(0)
+        self.assertIn('<img src="assets/matagent-mark.svg" alt="" width="38" height="38">', h)
+        self.assertIn("Materials Research Agent", h)
+        self.assertIn("MatAgent", re.sub(r"Materials Research Agent", "", h))
 
     def test_sections_in_order(self):
         ids = re.findall(r'<section[^>]*\bid="([^"]+)"', PAGE)
