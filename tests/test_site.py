@@ -62,16 +62,21 @@ def contrast(fg, bg):
     return (a + 0.05) / (b + 0.05)
 
 
+def parse_claims(text):
+    out = {}
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.lstrip().startswith("|") and re.fullmatch(r"C\d{2}", cells[0]):
+            out[cells[0]] = cells[-1].lower()
+    return out
+
+
 def claims():
     p = ROOT / "claims.md"
-    if not p.exists():
-        return {}
-    out = {}
-    for line in p.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"\W*(C\d+)\b.*?\b(confirmed|changed|dropped|unverified)\b", line, re.I)
-        if m:
-            out[m.group(1)] = m.group(2).lower()
-    return out
+    return parse_claims(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+
+NAV_IDS = {"literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces"}
 
 
 class SiteTests(unittest.TestCase):
@@ -144,6 +149,19 @@ class SiteTests(unittest.TestCase):
         text = visible_text(PAGE)
         for pat in FORBIDDEN:
             self.assertIsNone(re.search(pat, text, re.I), pat)
+
+    def test_nav_targets(self):
+        nav = re.search(r'<nav.*?</nav>', PAGE, flags=re.S).group(0)
+        hrefs = re.findall(r'href="#([^"]+)"', nav)
+        self.assertTrue(hrefs)
+        for h in hrefs:
+            self.assertIn(h, NAV_IDS)
+
+    def test_parse_claims(self):
+        sample = ("| ID | Claim (site wording basis) | Source @bc983737 (path:lines) | Status |\n"
+                  "|---|---|---|---|\n| C01 | a | x.py:1-2 | Confirmed |\n"
+                  "| C02 | b | y.py:3 | CHANGED |\n| note | c | d | confirmed |\n")
+        self.assertEqual(parse_claims(sample), {"C01": "confirmed", "C02": "changed"})
 
     def test_cards_have_claims(self):
         known = claims()
