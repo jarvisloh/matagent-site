@@ -159,6 +159,12 @@ class SiteTests(unittest.TestCase):
                   "| C02 | b | y.py:3 | CHANGED |\n| note | c | d | confirmed |\n")
         self.assertEqual(parse_claims(sample), {"C01": "confirmed", "C02": "changed"})
 
+    def test_claims_register_complete(self):
+        c = claims()
+        self.assertEqual(sorted(c), [f"C{i:02d}" for i in range(1, 41)])
+        for cid, status in c.items():
+            self.assertIn(status, {"confirmed", "changed", "dropped"}, cid)
+
     def test_cards_have_claims(self):
         known = claims()
         for tag in re.findall(r'<article class="card"[^>]*>', PAGE):
