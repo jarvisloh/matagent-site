@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>try{var t=localStorage.getItem("matagent-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{var t=localStorage.getItem("matagent-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}document.documentElement.classList.add("js")</script>
 <title>MatAgent · Research agent for materials science</title>
 <meta name="description" content="MatAgent is a research agent for materials science: it reads the literature, identifies missing data and formulates hypotheses screened by chemical-validity checks. Every run is recorded for review.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -107,16 +107,16 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
 .sch .chips rect { fill: var(--node); stroke: var(--accent); stroke-width: 1.2; }
 .sch .chips text { fill: var(--accent); font: 600 9.5px "Geist Mono", ui-monospace, monospace; }
 /* reveal: nodes rise in, edges draw (edges need pathLength="1"), then the controller unpauses tokens */
-.sch .node { opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i, 0) * 90ms); }
-.sch .edge { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .9s ease .35s; }
-.sch .edge.rej { stroke-dasharray: 3 4; stroke-dashoffset: 0; opacity: 0; transition: opacity .6s ease .8s; }
+.js .sch .node { opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i, 0) * 90ms); }
+.js .sch .edge { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .9s ease .35s; }
+.js .sch .edge.rej { stroke-dasharray: 3 4; stroke-dashoffset: 0; opacity: 0; transition: opacity .6s ease .8s; }
 .in .sch .node { opacity: 1; transform: none; }
 .in .sch .edge { stroke-dashoffset: 0; }
 .in .sch .edge.rej { opacity: 1; }
 .site-footer { border-top: 1px solid var(--line); padding: 24px 0; color: var(--muted); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) {
   .particle { display: none; }
-  .sch .node, .sch .edge { transition: none; opacity: 1; transform: none; stroke-dashoffset: 0; }
+  .js .sch .node, .js .sch .edge, .js .sch .edge.rej { transition: none; opacity: 1; transform: none; stroke-dashoffset: 0; }
 }
 </style>
 </head>
@@ -150,6 +150,7 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
   show();
 
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var timers = new Map();
   function each(fig, fn) { fig.querySelectorAll("svg.sch").forEach(function (s) { try { fn(s); } catch (e) {} }); }
   document.addEventListener("DOMContentLoaded", function () {
     var figs = document.querySelectorAll("figure.fig");
@@ -160,8 +161,9 @@ figure .sch { width: 100%; height: auto; display: block; overflow: visible; }
         var f = e.target;
         if (e.isIntersecting) {
           f.classList.add("in");
-          if (!reduce) setTimeout(function () { each(f, function (s) { s.unpauseAnimations(); }); }, 1100);
-        } else each(f, function (s) { s.pauseAnimations(); });
+          clearTimeout(timers.get(f));
+          if (!reduce) timers.set(f, setTimeout(function () { each(f, function (s) { s.unpauseAnimations(); }); }, 1100));
+        } else { clearTimeout(timers.get(f)); each(f, function (s) { s.pauseAnimations(); }); }
       });
     }, { threshold: 0.3 });
     figs.forEach(function (f) { io.observe(f); });

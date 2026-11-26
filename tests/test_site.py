@@ -166,6 +166,21 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Materials Research Agent", h)
         self.assertIn("MatAgent", re.sub(r"Materials Research Agent", "", h))
 
+    def test_edges_have_pathlength(self):
+        for svg in re.findall(r"<svg\b[^>]*class=\"[^\"]*\bsch\b.*?</svg>", PAGE, flags=re.S):
+            for tag in re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bedge\b[^>]*>", svg):
+                self.assertIn('pathLength="1"', tag)
+
+    def test_hidden_state_gated_by_js(self):
+        self.assertIn('classList.add("js")', PAGE)
+        for sel, body in re.findall(r"([^{}]+)\{([^}]*)\}", re.sub(r"/\*.*?\*/", "", css(), flags=re.S)):
+            if re.search(r"opacity:\s*0\b|stroke-dashoffset:\s*1\b", body):
+                self.assertTrue(all(x.strip().startswith(".js ") for x in sel.split(",")), sel)
+
+    def test_reduced_motion_covers_rejected_edges(self):
+        m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
+        self.assertIn(".sch .edge.rej", m.group(1))
+
     def test_sections_in_order(self):
         ids = re.findall(r'<section[^>]*\bid="([^"]+)"', PAGE)
         self.assertEqual(ids[:len(EXPECTED_SECTIONS)], EXPECTED_SECTIONS)
