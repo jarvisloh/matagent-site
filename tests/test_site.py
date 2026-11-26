@@ -74,8 +74,9 @@ def parse_claims(text):
 
 
 def claims():
-    p = ROOT / "claims.md"
-    return parse_claims(p.read_text(encoding="utf-8")) if p.exists() else {}
+    """The claims register lives in the private CATAGENT repo (docs/site/claims.md); None when absent."""
+    p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"
+    return parse_claims(p.read_text(encoding="utf-8")) if p.exists() else None
 
 
 class SiteTests(unittest.TestCase):
@@ -265,6 +266,8 @@ class SiteTests(unittest.TestCase):
 
     def test_claims_register_complete(self):
         c = claims()
+        if c is None:
+            self.skipTest("claims register (CATAGENT docs/site/claims.md) not present")
         self.assertEqual(sorted(c), [f"C{i:02d}" for i in range(1, 41)])
         for cid, status in c.items():
             self.assertIn(status, {"confirmed", "changed", "dropped"}, cid)
@@ -300,7 +303,8 @@ class SiteTests(unittest.TestCase):
             m = re.search(r'data-claims="([^"]+)"', tag)
             self.assertTrue(m, tag)
             for cid in m.group(1).split():
-                self.assertIn(known.get(cid), ("confirmed", "changed"), cid)
+                if known is not None:
+                    self.assertIn(known.get(cid), ("confirmed", "changed"), cid)
 
     def test_idx_full_opacity(self):
         # .idx is muted text; any opacity below 1 drops it under 4.5:1
