@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = []  # tasks 3-7 append: "opening","literature",...
+EXPECTED_SECTIONS = ["opening", "literature"]  # tasks 4-7 append
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"runs? (dft )?simulations", r"\bGNN", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
@@ -136,8 +136,8 @@ class SiteTests(unittest.TestCase):
 
     def test_figs_have_narrow(self):
         for fig in re.findall(r'<figure class="fig".*?</figure>', PAGE, flags=re.S):
-            self.assertEqual(len(re.findall(r'<svg[^>]*class="wide"', fig)), 1)
-            self.assertEqual(len(re.findall(r'<svg[^>]*class="narrow"', fig)), 1)
+            self.assertEqual(len(re.findall(r'<svg[^>]*class="sch wide"', fig)), 1)
+            self.assertEqual(len(re.findall(r'<svg[^>]*class="sch narrow"', fig)), 1)
 
     def test_font_families_geist_only(self):
         for f in re.findall(r"font-family:\s*([^;}]+)", css()):
