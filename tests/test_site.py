@@ -76,9 +76,6 @@ def claims():
     return parse_claims(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-NAV_IDS = {"literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces"}
-
-
 class SiteTests(unittest.TestCase):
     def test_title_and_meta(self):
         self.assertIn("<title>MatAgent · Research agent for materials science</title>", PAGE)
@@ -153,9 +150,8 @@ class SiteTests(unittest.TestCase):
     def test_nav_targets(self):
         nav = re.search(r'<nav.*?</nav>', PAGE, flags=re.S).group(0)
         hrefs = re.findall(r'href="#([^"]+)"', nav)
-        self.assertTrue(hrefs)
-        for h in hrefs:
-            self.assertIn(h, NAV_IDS)
+        self.assertEqual(hrefs, ["literature", "gaps", "hypotheses", "planning", "domains",
+                                 "record", "improvement", "interfaces"])
 
     def test_parse_claims(self):
         sample = ("| ID | Claim (site wording basis) | Source @bc983737 (path:lines) | Status |\n"
