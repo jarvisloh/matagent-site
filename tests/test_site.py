@@ -181,6 +181,11 @@ class SiteTests(unittest.TestCase):
         m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
         self.assertIn(".sch .dash", m.group(1))
 
+    def test_reduced_motion_hides_highlights(self):
+        # glow windows that start at t = 0 would leave a node lit in the static frame
+        m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
+        self.assertRegex(m.group(1), r"\.sch \.hl\s*\{[^}]*visibility:\s*hidden")
+
     def test_dash_not_edge(self):
         # dashed connectors never take pathLength (it rescales the dash) and never share the edge draw-in
         tags = re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bdash\b[^>]*>", PAGE)
