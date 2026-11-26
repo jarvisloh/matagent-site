@@ -177,9 +177,23 @@ class SiteTests(unittest.TestCase):
             if re.search(r"opacity:\s*0\b|stroke-dashoffset:\s*1\b", body):
                 self.assertTrue(all(x.strip().startswith(".js ") for x in sel.split(",")), sel)
 
-    def test_reduced_motion_covers_rejected_edges(self):
+    def test_reduced_motion_covers_dashed_connectors(self):
         m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
-        self.assertIn(".sch .edge.rej", m.group(1))
+        self.assertIn(".sch .dash", m.group(1))
+
+    def test_dash_not_edge(self):
+        # dashed connectors never take pathLength (it rescales the dash) and never share the edge draw-in
+        tags = re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bdash\b[^>]*>", PAGE)
+        self.assertTrue(tags)  # the literature figure's opt-in branch is dashed
+        self.assertNotRegex(PAGE, r'class="[^"]*\bedge (opt|rej)\b')
+        for tag in tags:
+            self.assertNotRegex(tag, r'class="[^"]*\bedge\b')
+            self.assertNotIn("pathLength", tag)
+
+    def test_fig_breakpoint(self):
+        m = re.search(r"@media \(max-width: ([\d.]+px)\) \{[^{}]*\.fig \.wide \{ display: none; \}", css())
+        self.assertTrue(m)
+        self.assertIn(m.group(1), ("1000px", "999.98px"))
 
     def test_sections_in_order(self):
         ids = re.findall(r'<section[^>]*\bid="([^"]+)"', PAGE)
