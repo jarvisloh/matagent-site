@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = ["opening", "literature"]  # tasks 4-7 append
+EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses"]  # tasks 5-7 append
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"runs? (dft )?simulations", r"\bGNN", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
