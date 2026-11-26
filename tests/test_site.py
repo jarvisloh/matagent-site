@@ -222,6 +222,31 @@ class SiteTests(unittest.TestCase):
         for cid, status in c.items():
             self.assertIn(status, {"confirmed", "changed", "dropped"}, cid)
 
+    @staticmethod
+    def _visible(fragment):
+        import html
+        text = html.unescape(re.sub(r"<[^>]+>", "", fragment)).replace("\u2060", "")
+        return re.sub(r"\s+", " ", text).strip()
+
+    def test_method_length(self):
+        blocks = re.findall(r'<p class="method">(.*?)</p>', PAGE, flags=re.S)
+        for b in blocks:
+            body = self._visible(re.sub(r"^\s*<b>Method</b>", "", b))
+            self.assertLessEqual(len(body), 140, body)
+
+    def test_plain_length(self):
+        for b in re.findall(r'<p class="(?:plain|lede)">(.*?)</p>', PAGE, flags=re.S):
+            self.assertLessEqual(len(self._visible(b).split()), 30, b)
+
+    def test_caption_length(self):
+        for b in re.findall(r"<figcaption>(.*?)</figcaption>", PAGE, flags=re.S):
+            self.assertLessEqual(len(self._visible(b)), 120, b)
+
+    def test_no_sep_after_method_label(self):
+        for b in re.findall(r'<p class="method">(.*?)</p>', PAGE, flags=re.S):
+            self.assertTrue(b.startswith("<b>Method</b>"), b[:40])
+            self.assertFalse(self._visible(b)[len("Method"):].lstrip().startswith("·"), b[:40])
+
     def test_cards_have_claims(self):
         known = claims()
         for tag in re.findall(r'<article class="card"[^>]*>', PAGE):
