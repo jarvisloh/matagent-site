@@ -17,7 +17,7 @@ PAGES = ["3", "7", "12"]  # the excerpts shown, by page (illustrative)
 # drafted steps (illustrative): task, method, suggested parameters, gap, cited page, core-hours, failed rule
 STEPS = [
     ("Relax Cu–Ag (111) slabs", "DFT · RPBE", "450 eV · k 4×4×1", GAPS[0], "3", 1200, None),
-    ("*CO at top and bridge", "DFT · RPBE", "450 eV · 3 sites", GAPS[0], "7", 2400, None),
+    ("*CO at top and bridge", "DFT · RPBE", "450 eV · 2 sites", GAPS[0], "7", 2400, None),
     ("Solvation of *CO", "implicit solvent", "ε = 78.4", GAPS[0], "19", 1600, "page"),
     ("C–C coupling barriers", "CI-NEB · RPBE", "5 images", GAPS[1], "12", 6000, None),
     ("Selectivity vs potential", "microkinetic model", "0 to −1.2 V", "product selectivity", "12", 400, "gap"),
@@ -46,18 +46,23 @@ def _n(v):
     return f"{v:,}"
 
 
-# pass timing (seconds from the pass start), shared by intro and loop; both variants run on one clock
-R0, D = .45, .6  # first row, row pitch
-T = {"dec": R0 + 5 * D + 1.25, "yes": R0 + 5 * D + 1.4, "design": R0 + 5 * D + 1.65}
+# pass timing (seconds from the pass start), shared by intro and loop; both variants run on one clock. One designer
+# call returns the whole list, so every block types in first; only then do the rule checks take the steps in order.
+TY0, TS = .45, .3  # first block typed, typing stagger
+C0, CK = TY0 + 5 * TS + .65, .4  # first check (after the last block is typed), check pitch
+T = {"decflow": C0 + 5 * CK + .2}
+T["dec"] = T["decflow"] + .3
+T["yes"] = T["dec"] + .15
+T["design"] = T["yes"] + .25
 T["odo"] = [T["design"] + .2 + .25 * k for k in range(len(VALID))]
-T["weeks"] = T["odo"][-1] + .4
-T["fsc"] = T["weeks"] + .2
-T["needle"] = T["fsc"] + .3
+T["weeks"] = T["odo"][-1] + .3
+T["fsc"] = T["weeks"] + .15
+T["needle"] = T["fsc"] + .25
 T["fsv"] = T["needle"] + 1.0
-NEEDLE_D = 1.4
+NEEDLE_D = 1.3
 PASS = T["needle"] + NEEDLE_D
-T0_INTRO, HOLD = .9, .8
-T0_LOOP = HOLD + .5
+T0_INTRO, HOLD = .9, .7
+T0_LOOP = HOLD + .45
 T_LOOP = round(T0_LOOP + PASS + .3, 2)
 assert T0_INTRO + PASS <= 10 and T_LOOP <= 10, (T0_INTRO + PASS, T_LOOP)
 
@@ -65,18 +70,19 @@ LABEL = ("Study design timeline, CDTP. CDTP 3.3 runs CDTP 3.2 when documents are
          "from the research request and any database records PLAN found, citing no pages, and the language model names "
          "2–5 gaps; CDTP 3.2 plans from page-cited excerpts, up to 12,000 characters by default. The study designer, a "
          "language model (one call by default, up to six in an approved workflow), drafts 3–6 steps, each with a task, "
-         "method, system, purpose, gap, evidence, core-hours and suggested parameters. Rule checks take the steps in "
-         "order and strike a step in amber when its task, method or purpose is missing, its gap is not on the list, it "
+         "method, system, purpose, gap, evidence, core-hours and suggested parameters, all returned in one reply. Rule "
+         "checks then take the steps in order and strike a step in amber when its task, method or purpose is missing, its gap is not on the list, it "
          "cites a page outside the excerpts shown, or its core-hours, the model's own estimate, fall outside "
          "1–200,000. Valid steps are numbered, and their core-hours stack along the lane at 2,000 core-hours per week. "
          "With at least two valid steps, the study design totals the core-hours and gives the timeline in weeks, "
          "rounded up; with fewer, with no language model, or when CDTP 3.2 has no cited evidence, the plan stays "
          "PLAN's rule-based template, labelled template with the reason, and a CDTP 3.1 run that found no records is "
-         "marked partial. CDTP 3.3 then scores feasibility, FS, assessing resources and tools: a model-assisted "
+         "marked partial. CDTP 3.3 then scores feasibility, FS, on the finished plan, the template included, assessing "
+         "resources and tools: a model-assisted "
          "measure of the run's own output. The steps, core-hours and FS value are illustrative.")
 LEGEND = [("okc", "passes every rule: numbered"), ("xc", "dropped: a rule failed"), ("flow", "core-hours, stacked"),
           ("dash", "route not taken here")]
-LEGEND_N = [[("okc", "valid: numbered"), ("xc", "dropped")], [("flow", "core-hours"), ("dash", "route not taken")]]
+LEGEND_N = [[("okc", "valid: numbered"), ("xc", "dropped")], [("flow", "core-hours, stacked")]]
 RULES = ["task, method or purpose is missing", "its gap is not on the list",
          "a cited page was not among the excerpts", "core-hours are outside 1–200,000"]
 RULES_N = ["task, method or purpose missing", "gap not on the list", "cited page not among excerpts",
@@ -117,7 +123,7 @@ def _row(i, step, x, y, w, h, lane, chk, wide, pre):
     cw = CW["wide" if wide else "narrow"]
     ok = bad is None
     k = VALID.index(step) if ok else None
-    tx, rx = x + 14, x + w - (14 if wide else 14)
+    tx, rx = x + 14, x + w - 14
     l1, l2, l3, l4 = y + 24, y + 44, y + (62 if wide else 63), y + (80 if wide else 82)
     hrs = f"{_n(hours)} core-h"
     cid = f"{pre}-c{i}"
@@ -304,7 +310,6 @@ def _lane_head(x0, u, top, bottom, axis_y, lbl_x, lbl_y, anchor, grid):
         P.append(f'<path class="f-planning-axis" d="M{f(gx)},{f(axis_y)} v5"/>')
         if j < LANE_MAX // PER_WEEK:  # no 10,000 label: it would run into 8,000
             P.append(f'<text class="sub" x="{f(gx)}" y="{f(axis_y + 20)}" text-anchor="middle">{_n(j * PER_WEEK)}</text>')
-            P.append(f'<text class="sub" x="{f(gx + PER_WEEK * u / 2)}" y="{f(top - 6)}" text-anchor="middle">wk {j + 1}</text>')
     P.append(f'<path class="f-planning-axis" d="M{f(x0)},{f(axis_y)} H{f(x0 + LANE_MAX * u)}"/>')
     a = f' text-anchor="{anchor}"' if anchor != "start" else ""
     P.append(f'<text class="lbl" x="{f(lbl_x)}" y="{f(lbl_y)}"{a}>cumulative core-hours · 2,000 per week</text>')
@@ -343,10 +348,11 @@ def _wide():
     P.append(pnl)
     last = y0 + 5 * pitch + bh
     P.append(_rules(30, gb + 20, 426, last - gb - 20, RULES, True))
-    # the carriage: a rail beside the lane, its arm to the designer and the nib that steps from row to row
+    rules_mid = (gb + 20 + last) / 2
+    # the checker: a rail from the rules card down the drafted steps; its nib steps from row to row
     mids = [y0 + i * pitch + bh / 2 for i in range(len(STEPS))]
     P.append(f'<g class="f-planning-rail"><path class="f-planning-rl" d="M470,{y0 + 4} V{last - 4}"/>'
-             f'<path class="f-planning-arm" d="M456,{f(mids[2])} H470"/></g>'
+             f'<path class="f-planning-arm" d="M456,{f(rules_mid)} H470"/></g>'
              f'<path class="f-planning-nib" d="M463,{f(mids[0] - 7)} L478,{f(mids[0])} L463,{f(mids[0] + 7)} Z" '
              f'data-ys="{" ".join(f(m - mids[0]) for m in mids)}"/>')
     P.append(_lane_head(LX, u, y0 - 4, last + 6, last + 12, 1070, last + 52, "end", True))
@@ -357,9 +363,9 @@ def _wide():
     dy = last + 86
     mid = (last + 40 + dy) / 2
     P.append(_flow(f"M{CX},{last + 4} V{last + 40} C{CX},{f(mid)} {f(BX + BW / 2)},{f(mid)} {f(BX + BW / 2)},{f(dy - 2)}",
-                   R0 + 5 * D + .9))
+                   T["decflow"]))
     P.append(f'<g class="card f-planning-dec"><rect x="{BX}" y="{f(dy)}" width="{BW}" height="58" rx="10"/>'
-             f'<text class="tag" x="{BX + 14}" y="{f(dy + 22)}">AT LEAST 2 VALID STEPS?</text>'
+             f'<text class="tag" x="{BX + 14}" y="{f(dy + 22)}">≥ 2 VALID STEPS?</text>'
              f'<text class="sub f-planning-cnt" x="{BX + 14}" y="{f(dy + 44)}">{len(VALID)} of {len(STEPS)} valid</text>'
              + _ok(BX + BW - 22, dy + 29, "f-planning-ok f-planning-decok") + "</g>")
     ddy = dy + 58 + 30
@@ -374,10 +380,11 @@ def _wide():
                                      ("lbl", "remain, no language model is available,", None),
                                      ("lbl", "or CDTP 3.2 has no cited evidence", None),
                                      ("lbl amb", "CDTP 3.1 with no records: partial", None)], True))
-    gx, gy, gr = 931, dy + 124, 64
+    gx, gy, gr = 931, dy + 140, 64
     P.append(f'<g class="f-planning-fsg"><path class="cv f-planning-fsc" d="{curve_d(BX + BW + 2, ddy + 36, gx - gr - 16, gy)}" marker-end="url(#arr)"/></g>')
     P.append(hdr(LX + 4, dy + 18, "FS · CDTP 3.3")
-             + f'<text class="lbl f-planning-gl" x="{LX + 4}" y="{f(dy + 38)}">assesses resources and tools</text>')
+             + f'<text class="lbl f-planning-gl" x="{LX + 4}" y="{f(dy + 38)}">scores the finished plan, template too</text>'
+             f'<text class="lbl f-planning-gl" x="{LX + 4}" y="{f(dy + 56)}">assesses resources and tools</text>')
     P.append(_gauge(gx, gy, gr))
     P.append(f'<text class="f-planning-fsv" x="{gx}" y="{f(gy + 44)}" text-anchor="middle">{FS}</text>'
              f'<text class="lbl f-planning-gl" x="{gx}" y="{f(gy + 66)}" text-anchor="middle">model-assisted · the run&#39;s own output</text>')
@@ -405,16 +412,20 @@ def _narrow():
     LX, u = 30, 300 / LANE_MAX
     hy = ry + rh + 30
     P.append(hdr(16, hy, "DRAFTED STEPS") + hdr(344, hy, "CHECK", "end"))
-    y0, pitch, bh = hy + 32, 116, 108
+    y0, pitch, bh = hy + 18, 116, 108
     last = y0 + 5 * pitch + bh
     # week columns sit inside each block's lane strip; labels above the first block and the axis below the last
     P.append(_lane_head(LX, u, y0 - 4, last, last + 10, 16, last + 52, "start", False))
     for i, s in enumerate(STEPS):
         y = y0 + i * pitch
         P.append(_row(i, s, 16, y, 328, bh, (LX, u, y + 90, 10), (322, y + 20), False, pre))
+    mids = [y0 + i * pitch + bh / 2 for i in range(len(STEPS))]
+    P.append(f'<g class="f-planning-rail"><path class="f-planning-rl" d="M8,{y0 + 4} V{last - 4}"/></g>'
+             f'<path class="f-planning-nib" d="M2,{f(mids[0] - 6)} L13,{f(mids[0])} L2,{f(mids[0] + 6)} Z" '
+             f'data-ys="{" ".join(f(m - mids[0]) for m in mids)}"/>')
     dy = last + 74
     P.append(f'<g class="card f-planning-dec"><rect x="16" y="{f(dy)}" width="328" height="58" rx="10"/>'
-             f'<text class="tag" x="30" y="{f(dy + 22)}">AT LEAST 2 VALID STEPS?</text>'
+             f'<text class="tag" x="30" y="{f(dy + 22)}">≥ 2 VALID STEPS?</text>'
              f'<text class="sub f-planning-cnt" x="30" y="{f(dy + 44)}">{len(VALID)} of {len(STEPS)} valid</text>'
              + _ok(322, dy + 29, "f-planning-ok f-planning-decok") + "</g>")
     ddy = dy + 58 + 28
@@ -424,15 +435,15 @@ def _narrow():
     gy0 = ddy + 116 + 28
     P.append(f'<g class="f-planning-fsg"><path class="cv f-planning-fsc" d="M180,{f(ddy + 118)} V{f(gy0 - 2)}" marker-end="url(#arr)"/></g>')
     gx, gr = 84, 60
-    gy = gy0 + 84
+    gy = gy0 + 98
     P.append(hdr(172, gy0 + 16, "FS · CDTP 3.3")
-             + f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 38)}">assesses resources</text>'
-             f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 56)}">and tools</text>')
+             + "".join(f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 38 + 18 * k)}">{t}</text>'
+                       for k, t in enumerate(("scores the finished plan,", "template too: assesses", "resources and tools"))))
     P.append(_gauge(gx, gy, gr))
-    P.append(f'<text class="f-planning-fsv" x="172" y="{f(gy0 + 92)}">{FS}</text>'
-             f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 118)}">model-assisted ·</text>'
-             f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 136)}">the run&#39;s own output</text>')
-    sy = gy0 + 154
+    P.append(f'<text class="f-planning-fsv" x="172" y="{f(gy0 + 110)}">{FS}</text>'
+             f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 136)}">model-assisted ·</text>'
+             f'<text class="lbl f-planning-gl" x="172" y="{f(gy0 + 154)}">the run&#39;s own output</text>')
+    sy = gy0 + 172
     sh = 54 + 20 * 5 + 6
     P.append(f'<path class="cv f-planning-no" d="M346,{f(dy + 29)} H353 V{f(sy + 30)} H347" marker-end="url(#arr)"/>'
              f'<text class="lbl amb" x="352" y="{f(dy - 6)}" text-anchor="end">no</text>')
@@ -453,19 +464,20 @@ JS = """MAFig.register("planning", function (root, variant) {
     needle = one(".f-planning-needle"), fsarc = one(".f-planning-fsarc"), fsv = one(".f-planning-fsv"),
     decok = one(".f-planning-decok"), cnt = one(".f-planning-cnt"), yes = q(".f-planning-yesg"),
     design = one(".f-planning-design"), wk = one(".f-planning-wk"), fsc = q(".f-planning-fsg"),
-    bars = q(".f-planning-bar"), marks = q(".f-planning-num, .f-planning-row .f-planning-ok, .f-planning-x"),
-    bad = q(".f-planning-badrect, .f-planning-under, .f-planning-why"), strikes = q(".f-planning-strike"),
-    blks = q(".f-planning-blk");
+    bars = q(".f-planning-bar"), strikes = q(".f-planning-strike");
   var A = +needle.getAttribute("data-a"), ys = nib ? nib.getAttribute("data-ys").split(" ").map(Number) : [];
   var odoTop = -(odo.getAttribute("data-n") - 1) * odo.getAttribute("data-pitch"), pitch = +odo.getAttribute("data-pitch");
   gsap.set(bars, {svgOrigin: function (i, el) { return el.getAttribute("data-x0") + " 0"; }});
   gsap.set(needle, {svgOrigin: needle.getAttribute("data-o")});
   // origins set once, at scale 1: an origin passed per tween is smoothed against the from-scale and leaves an offset
-  gsap.set(q(".f-planning-num, .f-planning-ok, .f-planning-x"), {transformOrigin: "50% 50%"});
+  gsap.set(q(".f-planning-num, .f-planning-ok, .f-planning-x, .f-planning-pnl"), {transformOrigin: "50% 50%"});
   var pop = {ease: "back.out(2.2)"};
-  // one pass from t0: each block types in, then its rule check stamps it; a tick numbers it and grows its bar, a
-  // strike marks the failing field; after the last row the decision, the design's total and weeks, and only then
-  // the FS needle. Every key in a fromTo start object is repeated in its end object (a loop wrap drops start-only keys).
+  // everything a pass reveals by opacity is registered here, and the loop clears exactly this list
+  var shown = [], reg = function (x) { shown = shown.concat(x); return x; };
+  // one pass from t0. The designer's one call returns the whole list, so all blocks type in first; then the checker
+  // nib runs down the rows in order: each check stamps a tick (number, bar) or an amber strike (failing field,
+  // reason). After the last check: the decision, the design's total and weeks, and only then the FS needle.
+  // Every key in a fromTo start object is repeated in its end object (a loop wrap drops start-only keys).
   function pass(tl, t0) {
     q(".f-planning-flow").forEach(function (el) {
       var t = t0 + +el.getAttribute("data-t");
@@ -474,48 +486,50 @@ JS = """MAFig.register("planning", function (root, variant) {
     });
     if (nib) tl.fromTo(nib, {y: 0}, {y: 0, duration: .01}, t0);
     rows.forEach(function (r, i) {
-      var t = t0 + __R0__ + i * __D__, ok = r.getAttribute("data-ok") === "1", wipe = r.querySelector(".f-planning-wipe"),
-        caret = r.querySelector(".f-planning-caret"), w = +wipe.getAttribute("data-w"), cw = +caret.getAttribute("data-w");
-      if (nib && i) tl.to(nib, {y: ys[i], duration: .25, ease: "power2.inOut"}, t - .25);
-      tl.fromTo(r.querySelector(".f-planning-blk"), {opacity: 0, x: -8}, {opacity: 1, x: 0, duration: .25}, t)
-        .fromTo(wipe, {attr: {width: 0}}, {attr: {width: w}, duration: .45, ease: "steps(14)"}, t)
-        .fromTo(caret, {x: 0, opacity: 0}, {x: 0, opacity: 1, duration: .01}, t)
-        .to(caret, {x: cw, duration: .45, ease: "steps(14)"}, t)
-        .to(caret, {opacity: 0, duration: .1}, t + .45)
-        .fromTo(r.querySelector(ok ? ".f-planning-ok" : ".f-planning-x"), {opacity: 0, scale: 1.8},
-          Object.assign({opacity: 1, scale: 1, duration: .3}, pop), t + .55);
+      var ty = t0 + __TY0__ + i * __TS__, tc = t0 + __C0__ + i * __CK__, ok = r.getAttribute("data-ok") === "1",
+        wipe = r.querySelector(".f-planning-wipe"), caret = r.querySelector(".f-planning-caret"),
+        w = +wipe.getAttribute("data-w"), cw = +caret.getAttribute("data-w");
+      tl.fromTo(reg(r.querySelector(".f-planning-blk")), {opacity: 0, x: -8}, {opacity: 1, x: 0, duration: .25}, ty)
+        .fromTo(wipe, {attr: {width: 0}}, {attr: {width: w}, duration: .45, ease: "steps(14)"}, ty)
+        .fromTo(caret, {x: 0, opacity: 0}, {x: 0, opacity: 1, duration: .01}, ty)
+        .to(caret, {x: cw, duration: .45, ease: "steps(14)"}, ty)
+        .to(caret, {opacity: 0, duration: .1}, ty + .45);
+      if (nib && i) tl.to(nib, {y: ys[i], duration: .2, ease: "power2.inOut"}, tc - .22);
+      tl.fromTo(reg(r.querySelector(ok ? ".f-planning-ok" : ".f-planning-x")), {opacity: 0, scale: 1.8},
+        Object.assign({opacity: 1, scale: 1, duration: .25}, pop), tc);
       if (ok) {
-        tl.fromTo(r.querySelector(".f-planning-num"), {opacity: 0, scale: 0}, Object.assign({opacity: 1, scale: 1, duration: .3}, pop), t + .7)
-          .fromTo(r.querySelector(".f-planning-bar"), {scaleX: 0}, {scaleX: 1, duration: .45, ease: "power3.out"}, t + .75);
+        tl.fromTo(reg(r.querySelector(".f-planning-num")), {opacity: 0, scale: 0}, Object.assign({opacity: 1, scale: 1, duration: .25}, pop), tc + .12)
+          .fromTo(r.querySelector(".f-planning-bar"), {scaleX: 0}, {scaleX: 1, duration: .4, ease: "power3.out"}, tc + .15);
       } else {
-        tl.fromTo(r.querySelector(".f-planning-strike"), {drawSVG: "0%"}, {drawSVG: "100%", duration: .25, ease: "none"}, t + .7)
-          .fromTo(r.querySelectorAll(".f-planning-badrect, .f-planning-under, .f-planning-why"), {opacity: 0}, {opacity: 1, duration: .25}, t + .75);
+        tl.fromTo(r.querySelector(".f-planning-strike"), {drawSVG: "0%"}, {drawSVG: "100%", duration: .2, ease: "none"}, tc + .12)
+          .fromTo(reg(gsap.utils.toArray(r.querySelectorAll(".f-planning-badrect, .f-planning-under, .f-planning-why"))), {opacity: 0}, {opacity: 1, duration: .2}, tc + .15);
       }
     });
-    tl.fromTo(decok, {opacity: 0, scale: .4}, Object.assign({opacity: 1, scale: 1, duration: .3}, pop), t0 + __DEC__)
-      .fromTo(cnt, {opacity: 0}, {opacity: 1, duration: .3}, t0 + __DEC__)
-      .fromTo(yes, {opacity: 0}, {opacity: 1, duration: .3}, t0 + __YES__)
-      .fromTo(design, {opacity: 0, y: 8}, {opacity: 1, y: 0, duration: .35}, t0 + __DESIGN__)
+    tl.fromTo(reg(decok), {opacity: 0, scale: .4}, Object.assign({opacity: 1, scale: 1, duration: .3}, pop), t0 + __DEC__)
+      .fromTo(reg(cnt), {opacity: 0}, {opacity: 1, duration: .3}, t0 + __DEC__)
+      .fromTo(reg(yes), {opacity: 0}, {opacity: 1, duration: .3}, t0 + __YES__)
+      .fromTo(reg(design), {opacity: 0, y: 8}, {opacity: 1, y: 0, duration: .35}, t0 + __DESIGN__)
       .fromTo(odo, {y: odoTop}, {y: odoTop, duration: .01}, t0);
     [__ODO__].forEach(function (t, k) { tl.to(odo, {y: odoTop + (k + 1) * pitch, duration: .22, ease: "power2.out"}, t0 + t); });
-    tl.fromTo(wk, {opacity: 0}, {opacity: 1, duration: .3}, t0 + __WEEKS__)
-      .fromTo(fsc, {opacity: 0}, {opacity: 1, duration: .3}, t0 + __FSC__)
+    tl.fromTo(reg(wk), {opacity: 0}, {opacity: 1, duration: .3}, t0 + __WEEKS__)
+      .fromTo(reg(fsc), {opacity: 0}, {opacity: 1, duration: .3}, t0 + __FSC__)
       .fromTo(fsarc, {drawSVG: "0%"}, {drawSVG: "100%", duration: 1, ease: "power2.out"}, t0 + __NEEDLE__)
       .fromTo(needle, {rotation: -A}, {rotation: 0, duration: __ND__, ease: "elastic.out(1, .45)"}, t0 + __NEEDLE__)
-      .fromTo(fsv, {opacity: 0}, {opacity: 1, duration: .3}, t0 + __FSV__);
+      .fromTo(reg(fsv), {opacity: 0}, {opacity: 1, duration: .3}, t0 + __FSV__);
   }
   var intro = gsap.timeline({defaults: {ease: "power3.out"}});
   intro.from(q(".hdr, .f-planning-note"), {opacity: 0, duration: .5}, 0)
     .from(q(".f-planning-in"), {opacity: 0, x: -10, duration: .35, stagger: .08}, .1)
-    .from(q(".f-planning-pnl"), {opacity: 0, scale: .97, transformOrigin: "50% 50%", duration: .5}, .3)
+    .from(q(".f-planning-pnl"), {opacity: 0, scale: .97, duration: .5}, .3)
     .from(q(".f-planning-cv"), {drawSVG: 0, opacity: 0, duration: .4, stagger: .05}, .4)
     .from(q(".f-planning-rules, .f-planning-lane, .f-planning-rail"), {opacity: 0, duration: .4, stagger: .05}, .5)
     .from(q(".f-planning-dec, .f-planning-stamp, .f-planning-no, .f-planning-gbg, .f-planning-gl"), {opacity: 0, duration: .4}, .6)
     .from(q(".legend"), {opacity: 0, duration: .4}, .7);
   pass(intro, __T0I__);
-  // loop: hold the finished frame, clear the pass's results, replay. immediateRender off: the frame stays until then.
+  // loop: hold the finished frame, clear what the pass reveals (registered above), replay. immediateRender off: the
+  // frame stays until then.
   var loop = gsap.timeline({repeat: -1, defaults: {immediateRender: false}});
-  loop.to(blks.concat(marks, bad, [decok, cnt, design, fsv], yes, fsc), {opacity: 0, duration: .4}, __HOLD__)
+  loop.to(shown, {opacity: 0, duration: .4}, __HOLD__)
     .to(strikes.concat([fsarc]), {drawSVG: "0%", duration: .4}, __HOLD__)
     .to(bars, {scaleX: 0, duration: .4}, __HOLD__)
     .to(needle, {rotation: -A, duration: .4}, __HOLD__);
@@ -524,7 +538,7 @@ JS = """MAFig.register("planning", function (root, variant) {
   loop.set({}, {}, __TL__);
   return {intro: intro, loop: loop};
 });"""
-for _k, _v in {"__R0__": R0, "__D__": D, "__DEC__": T["dec"], "__YES__": T["yes"], "__DESIGN__": T["design"],
+for _k, _v in {"__TY0__": TY0, "__TS__": TS, "__C0__": C0, "__CK__": CK, "__DEC__": T["dec"], "__YES__": T["yes"], "__DESIGN__": T["design"],
                "__ODO__": ", ".join(f"{t:.2f}" for t in T["odo"]), "__WEEKS__": T["weeks"], "__FSC__": T["fsc"],
                "__NEEDLE__": T["needle"], "__ND__": NEEDLE_D, "__FSV__": T["fsv"], "__T0I__": T0_INTRO,
                "__HOLD__": HOLD, "__T0L__": T0_LOOP, "__TL__": T_LOOP}.items():
