@@ -892,10 +892,11 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
-    # (record tag, detail) in the order the slips land in the ledger (C28, C68)
-    RECORD_SLIPS = [("INPUT", "secrets redacted"), ("CHECKPOINT", "after step 1"), ("CHECKPOINT", "step 2 failed"),
-                    ("CHECKPOINT", "after step 2"), ("CHECKPOINT", "after step 3"), ("OUTPUTS · METRICS", ""),
-                    ("TRACE · ERRORS", "")]
+    # (record tag, details in turn) in the order the slips land in the ledger (C28, C68); a run keeps one checkpoint,
+    # rewritten in place after each step
+    RECORD_SLIPS = [("INPUT", ("secrets redacted",)),
+                    ("CHECKPOINT", ("after step 1", "step 2 failed", "after step 2", "after step 3")),
+                    ("OUTPUTS · METRICS", ()), ("TRACE", ())]
 
     def test_fig_record(self):
         import html
@@ -935,17 +936,33 @@ class SiteTests(unittest.TestCase):
                      re.findall(r'<text[^>]*data-u="([\d.]+)" data-t="([\d.]+)"[^>]*>(.*?)</text>', body)}
             self.assertLess(timed["approved"][1], timed["step 2 re-runs"][1], v)  # approval before the re-run
             self.assertLess(timed["step 2 fails"][1], timed["approved"][1], v)
+            # the trace scrolls u = 0..100 past the write head in data-d seconds: nothing shows before its event emerges
+            d = float(re.search(r'class="f-record-scroll"[^>]*data-d="([\d.]+)"', body).group(1))
             slips = re.findall(r'<g class="f-record-slip[^"]*" data-u="([\d.]+)" data-t="([\d.]+)"[^>]*>(.*?)</g>', body, flags=re.S)
             self.assertEqual(len(slips), len(self.RECORD_SLIPS), v)
             ts = [float(s) for _, s, _ in slips]
             self.assertEqual(ts, sorted(ts), v)
-            for (u, s, inner), (tg, det) in zip(slips, self.RECORD_SLIPS):
+            for (u, s, inner), (tg, dets) in zip(slips, self.RECORD_SLIPS):
                 txt = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", inner)))
                 self.assertIn(tg, txt, (v, tg))
-                self.assertIn(det, txt, (v, det))
-            self.assertIn("f-record-slip amb", body)  # the failed step's checkpoint is marked amber
-            # the trace scrolls u = 0..100 past the write head in data-d seconds: nothing shows before its event emerges
-            d = float(re.search(r'class="f-record-scroll"[^>]*data-d="([\d.]+)"', body).group(1))
+                self.assertNotIn("ERRORS", txt)  # the failure is not shown as kept in the record's errors
+                if len(dets) < 2:
+                    for det in dets:
+                        self.assertIn(det, txt, (v, det))
+                    continue
+                # one checkpoint, its detail rewritten in place: consecutive windows that never overlap, each after its save
+                wins = re.findall(r'<text[^>]*data-u="([\d.]+)" data-w="([\d. ]+)"[^>]*>(.*?)</text>', inner)
+                self.assertEqual([html.unescape(t) for _, _, t in wins], list(dets), v)
+                spans = [[float(x) for x in w.split()] for _, w, _ in wins]
+                for (cu, _w, _t), sp in zip(wins, spans):
+                    self.assertGreater(sp[0], float(cu) / 100 * d, (v, _t))
+                for a, b in zip(spans, spans[1:]):
+                    self.assertEqual(len(a), 2)
+                    self.assertLessEqual(a[1], b[0], v)
+                self.assertEqual(len(spans[-1]), 1, v)  # the last save stays
+                amb = re.findall(r'class="f-record-sp amb"[^>]*data-w="([\d. ]+)"', inner)
+                self.assertEqual(amb, [wins[1][1]], v)  # amber stripe exactly while it holds the failed result
+            self.assertEqual(body.count('class="f-record-slip'), len(self.RECORD_SLIPS), v)
             for txt, (u, s) in timed.items():
                 self.assertGreaterEqual(s, u / 100 * d - 1e-6, (v, txt))
             for u, s, _ in slips:
@@ -956,6 +973,12 @@ class SiteTests(unittest.TestCase):
             self.assertNotRegex(body, r"<animate|[Vv]alidat|[Ss]tage gate")
             self.assertNotIn("{", body)
         self.assertRegex(css(), r"\.f-record-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        # dashed lines are faded in, never drawn with drawSVG (it would overwrite their dash pattern)
+        jsr = re.search(r'MAFig\.register\("record".*?<!-- figjs:record:end -->', self._script("figjs"), flags=re.S).group(0)
+        drawn = re.findall(r'q\("([^"]*)"\),\s*\{drawSVG', jsr)
+        self.assertTrue(drawn)
+        for sel in drawn:
+            self.assertNotRegex(sel, r"f-record-(head|div|cur|rule)", sel)
         allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
         for cid in ("C26", "C27", "C28", "C29", "C68"):
             self.assertIn(cid, allc)

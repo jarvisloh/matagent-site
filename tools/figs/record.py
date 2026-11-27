@@ -45,10 +45,15 @@ CHECKPOINTS = [21.2, 35.8, 85.2, 97.2]  # after step 1, after step 2 failed (and
 # finished (re-run), step 3 started/finished, run complete; each is one event in the stored event stream
 EVENTS = [(2.6, 0), (8, 0), (19, 0), (23, 0), (U_FAIL, 1), (U_PAUSE, 1), (U_OK, 0), (72, 0), (83, 0), (87, 0), (95, 0),
           (100, 0)]
-# (event u, record, detail, amber): what lands in the run record after each event (C28, C68)
-SLIPS = [(2.6, "INPUT", "secrets redacted", 0), (21.2, "CHECKPOINT", "after step 1", 0),
-         (35.8, "CHECKPOINT", "step 2 failed", 1), (85.2, "CHECKPOINT", "after step 2", 0),
-         (97.2, "CHECKPOINT", "after step 3", 0), (100, "OUTPUTS · METRICS", "", 0), (100, "TRACE · ERRORS", "", 0)]
+# the run record's slips (C28, C68): (record, details in turn). A run keeps ONE checkpoint and each save replaces it,
+# so the checkpoint slip lands once and its detail is rewritten in place; the failed result (amber) is dropped on
+# approval and survives in the event stream, not in the checkpoint.
+SLIPS = [("INPUT", ("secrets redacted",)),
+         ("CHECKPOINT", ("after step 1", "step 2 failed", "after step 2", "after step 3")),
+         ("OUTPUTS · METRICS", ()), ("TRACE", ())]
+CK_AMBER = 1  # the checkpoint detail that holds the failed result
+# (event u, slip): every write to the record, in order; one flow along the connector each
+WRITES = [(2.6, 0)] + [(u, 1) for u in CHECKPOINTS] + [(100, 2), (100, 3)]
 # (text, event u, band, anchor, anchor u): screen labels (wide bands; narrow puts them all in the label column)
 LABELS = [("run starts", 2.6, "low", "start", .4), ("step 1", 8, "top", "middle", 13.5),
           ("step 2", 23, "top", "middle", 27), ("step 2 fails", U_FAIL, "low", "middle", U_DIP),
@@ -61,10 +66,12 @@ TIMES = [("10:02", 2.6), ("10:09", U_PAUSE), ("12:31", U_OK), ("12:40", 100)]  #
 # --- timing (s) ---------------------------------------------------------------------------------------------------
 REVEAL = .05  # a label shows just after it has fully passed the write head
 FLOW_D, DROP_D, SLIP_GAP = .3, .55, .25  # a record flows to the ledger, then drops onto the stack
-FLOW_AT = {}  # slip index -> flow start (s, within a pass)
-for _i, (_u, *_r) in enumerate(SLIPS):
-    FLOW_AT[_i] = tau(_u) + REVEAL + (SLIP_GAP if _i and SLIPS[_i - 1][0] == _u else 0)
-PASS = max(FLOW_AT.values()) + FLOW_D + DROP_D
+FLOW_AT = []  # write index -> flow start (s, within a pass); writes at the same event follow each other
+for _j, (_u, _s) in enumerate(WRITES):
+    FLOW_AT.append(tau(_u) + REVEAL + (SLIP_GAP if _j and WRITES[_j - 1][0] == _u else 0))
+ARRIVE = [t + FLOW_D for t in FLOW_AT]  # the write reaches the ledger
+SWAP = .15  # a rewritten detail fades in this long after the old one has started fading out
+PASS = max(ARRIVE) + DROP_D
 W_RUN = [0, tau(U_PAUSE), tau(U_OK), tau(100)]  # status "running" windows (on, off, on, off)
 W_PAUSE = [tau(U_PAUSE), tau(U_OK)]
 W_DONE = [tau(100)]
@@ -170,8 +177,10 @@ def _knob(cx, cy, r, opts, sel, title, v):
              f'data-a="{(ang - 180) % 360}" data-o="{f(cx)} {f(cy)}"/>')
     P.append(f'<circle class="f-record-kd" cx="{f(cx)}" cy="{f(cy)}" r="2.6"/>')
     P.append(_txt("hdr f-record-pm", cx, cy + r + 24, title, "middle"))
-    w = max(len(opts[0]) * cw + off, len(title) * HW[v] / 2), max(len(opts[2]) * cw + off, len(title) * HW[v] / 2)
-    return "".join(P), (cx - w[0], cx + w[1])
+    half_title = len(title) * HW[v] / 2
+    left = max(len(opts[0]) * cw + off, half_title)  # extent left of the centre: left option or title
+    right = max(len(opts[2]) * cw + off, half_title)
+    return "".join(P), (cx - left, cx + right)
 
 
 def _ring(cx, cy, r, s, v):
@@ -210,8 +219,8 @@ def _status(x, y, v):
             + _txt("sub f-record-pi f-record-st", x + 11, y, "complete", attrs=f'data-w="{_w(on(W_DONE))}"'))
 
 
-def _pen(x, y, ax):
-    return (f'<g transform="translate({f(x)},{f(y)})"><g class="f-record-pen" data-ax="{ax}">'
+def _pen(x, y):
+    return (f'<g transform="translate({f(x)},{f(y)})"><g class="f-record-pen">'
             f'<circle class="f-record-ping" r="5" opacity="0"/>'
             f'<circle class="f-record-pt" r="4.5" data-w="{_w(W_PEN_T)}"/>'
             f'<circle class="f-record-pa" r="4.5" data-w="{_w(W_PEN_A)}" opacity="0"/></g></g>')
@@ -221,24 +230,39 @@ def _ledger(x0, x1, y0, v, inlet):
     """The run record: a stack of slips (first at the bottom) under the inlet, the event-stream ticks, run actions."""
     sh, pitch = (28, 34) if v == "wide" else (30, 36)
     top = y0 + 20  # the top slip's slot
+    start = top - 10  # a slip appears here, level with the inlet, then drops to its slot
     P, flows = [], []
-    for i, (u, k, det, amb) in enumerate(SLIPS):
+    for i, (k, dets) in enumerate(SLIPS):
         y = top + (len(SLIPS) - 1 - i) * pitch
-        dy = y - (y0 - 4)
-        t = FLOW_AT[i] + FLOW_D
+        js = [j for j, (_u, si) in enumerate(WRITES) if si == i]  # this slip's writes
+        u, t = WRITES[js[0]][0], ARRIVE[js[0]]
         assert t > tau(u)
         tag_w = len(k) * TW[v]
-        assert 14 + tag_w + (12 + len(det) * CW[v] if det else 0) + 10 <= x1 - x0 - 20, (k, det)
-        P.append(f'<g class="f-record-slip{" amb" if amb else ""}" data-u="{_tv(u)}" data-t="{_tv(t)}" data-dy="{f(dy)}">'
-                 f'<rect x="{f(x0 + 10)}" y="{f(y)}" width="{f(x1 - x0 - 20)}" height="{sh}" rx="5"/>'
-                 f'<path class="f-record-sp" d="M{f(x0 + 10)},{f(y + 5)} v{sh - 10}"/>'
-                 + _txt("tag f-record-k", x0 + 24, y + sh / 2 + 4.5, k)
-                 + (_txt("sub", x0 + 24 + tag_w + 12, y + sh / 2 + 4.5, det) if det else "") + "</g>")
-        flows.append(f'<path class="f-record-flow" d="{inlet}" data-f="{_tv(FLOW_AT[i])}" opacity="0"/>')
+        assert all(14 + tag_w + 12 + len(d) * CW[v] + 10 <= x1 - x0 - 20 for d in dets), (k, dets)
+        sp = f'M{f(x0 + 10)},{f(y + 5)} v{sh - 10}'
+        D_ = [f'<g class="f-record-slip" data-u="{_tv(u)}" data-t="{_tv(t)}" data-dy="{f(y - start)}">'
+              f'<rect x="{f(x0 + 10)}" y="{f(y)}" width="{f(x1 - x0 - 20)}" height="{sh}" rx="5"/>'
+              f'<path class="f-record-sp" d="{sp}"/>', _txt("tag f-record-k", x0 + 24, y + sh / 2 + 4.5, k)]
+        for n, (d, j) in enumerate(zip(dets, js)):
+            if len(dets) == 1:
+                D_.append(_txt("sub", x0 + 24 + tag_w + 12, y + sh / 2 + 4.5, d))
+                continue
+            # rewritten in place: each detail shows from its write's arrival until the next write replaces it
+            on = ARRIVE[j] + (SWAP if n else 0)
+            w = [on] + ([ARRIVE[js[n + 1]]] if n + 1 < len(js) else [])
+            assert on > tau(WRITES[j][0])
+            last = n + 1 == len(dets)
+            D_.append(_txt("sub f-record-det", x0 + 24 + tag_w + 12, y + sh / 2 + 4.5, d,
+                           attrs=f'data-u="{_tv(WRITES[j][0])}" data-w="{_w(w)}"' + ("" if last else ' opacity="0"')))
+            if n == CK_AMBER:  # amber stripe while the checkpoint holds the failed result
+                D_.insert(2, f'<path class="f-record-sp amb" d="{sp}" data-u="{_tv(WRITES[j][0])}" data-w="{_w(w)}" opacity="0"/>')
+        P.append("".join(D_) + "</g>")
+    for j in range(len(WRITES)):
+        flows.append(f'<path class="f-record-flow" d="{inlet}" data-f="{_tv(FLOW_AT[j])}" opacity="0"/>')
     yb = top + len(SLIPS) * pitch  # below the bottom slip
     P.append(f'<path class="f-record-rule" d="M{f(x0 + 10)},{f(yb + 6)} H{f(x1 - 10)}"/>')
     ys = yb + 28
-    P.append(_txt("tag", x0 + 12, ys, "EVENT STREAM"))
+    P.append(_txt("tag f-record-lt", x0 + 12, ys, "EVENT STREAM"))
     tx = x0 + 12
     ty = ys + 10
     for j, (u, amb) in enumerate(EVENTS):
@@ -249,7 +273,7 @@ def _ledger(x0, x1, y0, v, inlet):
     assert tx + len(EVENTS) * 17 <= x1 - 10
     yr = ty + 30
     P.append(f'<path class="f-record-rule" d="M{f(x0 + 10)},{f(yr)} H{f(x1 - 10)}"/>')
-    P.append(_txt("tag", x0 + 12, yr + 22, "RUN ACTIONS"))
+    P.append(_txt("tag f-record-lt", x0 + 12, yr + 22, "RUN ACTIONS"))
     cx, cy = x0 + 12, yr + 32
     rows = [["pause", "resume", "cancel"], ["replay", "report"]]
     for row in rows:
@@ -281,7 +305,8 @@ LABEL = ("An oscilloscope trace of one chained run, with a run record beside it;
          "starts and its input is stored with secrets redacted. Step 1 runs and a checkpoint is saved. Step 2 fails and a "
          "checkpoint is saved; under ask, the run pauses for human review and the trace flat-lines in amber until a person "
          "approves. Then step 2 re-runs, while step 1 keeps its result and is not re-run, and step 3 runs, each followed by "
-         "a checkpoint. When the run completes, its outputs, metrics, trace and errors are stored. Every event goes to the "
+         "a checkpoint. The run keeps one checkpoint and each save replaces the last, so once approved the failed result is "
+         "dropped from it and remains in the event stream. When the run completes, its outputs, metrics and trace are stored. Every event goes to the "
          "run's stored event stream. A run can be paused, resumed, cancelled and replayed, and a report generated from its "
          "record. Values are illustrative.")
 
@@ -359,9 +384,9 @@ def _wide():
             xr -= 3
         S.append(f'<path class="f-record-tk" d="M{f(g.p(u)[0])},312 v5"/>')
         S.append(_timed("sub f-record-pm", x, 333, s, u, tau((xr - XL) / g.k) + REVEAL, an))
-    P.append(f'<g clip-path="url(#{pre}-clip)"><g class="f-record-scroll" data-ax="x" data-x0="{f(XR - XL)}" '
+    P.append(f'<g clip-path="url(#{pre}-clip)"><g class="f-record-scroll" data-x0="{f(XR - XL)}" '
              f'data-x1="{f(SX0 - XR)}" data-d="{_tv(D)}">' + "".join(S) + "</g></g>")
-    P.append(_pen(XR, 238, "y"))
+    P.append(_pen(XR, 238))
     # harness controls under the screen
     hy = 368
     lab = "HARNESS CONTROL · SET BY YOU"
@@ -377,7 +402,7 @@ def _wide():
     P.append(ctl)
     assert cy + 18 + 24 + 12 <= PB
     # ledger and the connector from the write head
-    inlet = curve_d(SX1, 238, LX0 - 2, LY0 + 14)
+    inlet = curve_d(SX1, 238, LX0 - 2, LY0 + 24)  # level with a new slip (top - 10 + 14), clear of the frame's corner
     led, flows, ly1 = _ledger(LX0, LX1, LY0, v, inlet)
     P.append(f'<path class="cv" d="{inlet}" marker-end="url(#arr)"/>')
     P.append(led + flows)
@@ -410,9 +435,9 @@ def _narrow():
     assert 197 + len("paused for review") * CW[v] <= PX1 - 6
     SX0, SX1, SY0 = 22, 338, by + 14
     K = 5.6
-    TC1, GB0, GB1, LC0 = 74, 78, 196, 206  # time column | grid band | label column
+    TC1, GB0, GB1, LC0 = 72, 78, 196, 206  # time column | grid band | label column
     g = _Geo(v, SY0 + 14, K, GB0 + 4 + .4 * 64, 64)
-    assert g.p(0, 1.1)[0] + 3 <= GB1 and g.p(0, -.4)[0] - 7 >= TC1 + 1
+    assert g.p(0, 1.1)[0] + 3 <= GB1 and g.p(0, -.4)[0] - 7 >= TC1 + 3
     YH = g.p(100)[1]  # the write head
     SY1 = YH + 14
     PB = SY1 + 16
@@ -456,9 +481,9 @@ def _narrow():
         S.append(f'<path class="f-record-tk" d="M{TC1},{f(g.p(u)[1])} h-4"/>')
         assert TC1 - 6 - len(s) * CW[v] >= SX0 + 3
         S.append(_timed("sub f-record-pm", TC1 - 6, y + 4.5, s, u, tau(ur + 7.5 / K) + REVEAL, "end"))
-    P.append(f'<g clip-path="url(#{pre}-clip)"><g class="f-record-scroll" data-ax="y" data-x0="{f(YH - g.t0)}" '
+    P.append(f'<g clip-path="url(#{pre}-clip)"><g class="f-record-scroll" data-x0="{f(YH - g.t0)}" '
              f'data-x1="{f(SY0 - YH)}" data-d="{_tv(D)}">' + "".join(S) + "</g></g>")
-    P.append(_pen(g.base, YH, "x"))
+    P.append(_pen(g.base, YH))
     LY0 = PB + 44
     inlet = vcurve_d(g.base, SY1 + 2, 180, LY0 - 2)
     led, flows, ly1 = _ledger(12, 348, LY0, v, inlet)
@@ -514,11 +539,11 @@ JS = """MAFig.register("record", function (root, variant) {
     });
   }
   var intro = gsap.timeline({defaults: {ease: "power3.out"}});
-  intro.from(q(".hdr:not(.f-record-pm), .legend, .f-record-ledger, .f-record-rule, .f-record-tick:not(.on), .f-record-chip, .f-record-slip ~ .tag, .cv"), {opacity: 0, duration: .5}, 0)
+  intro.from(q(".hdr:not(.f-record-pm), .legend, .f-record-ledger, .f-record-rule, .f-record-tick:not(.on), .f-record-chip, .f-record-lt, .cv"), {opacity: 0, duration: .5}, 0)
     .from(q(".f-record-hous"), {opacity: 0, duration: .5}, .05)
     .from(q(".f-record-scr"), {opacity: 0, duration: .4}, .15)
-    .from(q(".f-record-grid, .f-record-head"), {drawSVG: "0%", duration: .5, stagger: .015}, .25)
-    .from(q(".hdr.f-record-pm, .f-record-div, .f-record-knob, .f-record-gnd, .f-record-sw, .f-record-cb, .f-record-cbt, .f-record-kd, " +
+    .from(q(".f-record-grid"), {drawSVG: "0%", duration: .5, stagger: .015}, .25)
+    .from(q(".hdr.f-record-pm, .f-record-div, .f-record-head, .f-record-knob, .f-record-gnd, .f-record-sw, .f-record-cb, .f-record-cbt, .f-record-kd, " +
             ".sub.f-record-pm:not([data-t]), .sub.f-record-pi:not([data-t]):not([data-w])"), {opacity: 0, duration: .4, stagger: .008}, .35)
     .from(q(".f-record-kp"), {rotation: function (i, p) { return -p.getAttribute("data-a"); }, duration: .6, ease: "back.out(1.6)"}, .7)
     .from(q(".f-record-swk"), {x: -20, duration: .5}, .7)
