@@ -408,11 +408,43 @@ class SiteTests(unittest.TestCase):
         self.assertLessEqual(int(m.group(1)), 420)
 
     def test_opening_plain_language(self):
-        fig = re.search(r'<figure class="fig" data-fig="opening">.*?</figure>', PAGE, flags=re.S).group(0)
-        shown = " ".join(re.findall(r'<text class="(?:sub|ttl)"[^>]*>(.*?)</text>', fig))
+        import html
+        fig = re.search(r'<figure class="fig" data-fig="opening"[^>]*>.*?</figure>', PAGE, flags=re.S).group(0)
+        shown = html.unescape(" ".join(re.findall(r'<text class="(?:sub|ttl)"[^>]*>(.*?)</text>', fig)))
         shown += " " + re.search(r"<figcaption>(.*?)</figcaption>", fig, flags=re.S).group(1)
-        self.assertNotRegex(shown, r"\b(LCA|HF|PLAN|CDTP)\b|\d\.\d|[Vv]alidation")
-        self.assertRegex(fig, r'aria-label="[^"]*LCA 5\.1[^"]*HF 8\.3')
+        # plain words, no mode codes or version-like numbers; MatOS routing is not claimed (C42)
+        self.assertNotRegex(shown, r"\b(LCA|HF|CDTP|GAR|MMR)\b|\d\.\d|[Vv]alidat")
+        self.assertNotIn("MatOS", fig)
+        for want in ("Ranked papers", "Cited answers", "Study design", "New modules", "Run scores", "Run record"):
+            self.assertIn(want, shown)
+        for label in re.findall(r'aria-label="([^"]*)"', fig):
+            for mod in ("SEARCH", "AUGMENT", "PLAN", "DISCOVER", "EVALUATE"):
+                self.assertIn(mod, label)
+
+    def test_fig_opening(self):
+        sec = re.search(r'<section id="opening".*?</section>', PAGE, flags=re.S).group(0)
+        fig = re.search(r'<figure class="fig" data-fig="opening" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn(">MatAgent<", body, v)
+            for mod in ("EARCH", "UGMENT", "LAN", "ISCOVER", "VALUATE", "MEMORY"):
+                self.assertIn(mod, body, (v, mod))
+            # SMIL-era classes stay out of GSAP figures until Task 14 removes the old CSS
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate")
+        self.assertIn(">chat agent · modes<", fig)
+        for card in re.findall(r'<article class="card"[^>]*>', sec):
+            self.assertIn("data-claims=", card)
+        self.assertIn('MAFig.register("opening"', self._script("figjs"))
+        self.assertNotIn("scrub", re.search(r'MAFig\.register\("opening".*', self._script("figjs"), flags=re.S).group(0))
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())

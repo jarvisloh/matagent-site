@@ -31,6 +31,7 @@ ICONS = {
     "memory": '<ellipse cx="9" cy="4.2" rx="5.6" ry="2.1"/><path d="M3.4 4.2v9.4c0 1.2 2.5 2.1 5.6 2.1s5.6-.9 5.6-2.1V4.2M3.4 8.9c0 1.2 2.5 2.1 5.6 2.1s5.6-.9 5.6-2.1"/>',
     "chat": '<path d="M3 3.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 15 12.5H8l-3.5 3v-3H3A1.5 1.5 0 0 1 1.5 11V5A1.5 1.5 0 0 1 3 3.5z"/>',
     "chain": '<rect x="1.5" y="6" width="5" height="5" rx="1.2"/><rect x="11.5" y="6" width="5" height="5" rx="1.2"/><path d="M6.5 8.5h5"/>',
+    "plug": '<path d="M6.5 2v4M11.5 2v4M4 6h10v3.5a5 5 0 0 1-10 0zM9 14.5V17"/>',
 }
 
 # Hidden shared defs: one <symbol id="i-<name>"> per icon (18x18), the hexagon (r = 10) and the tick, and the arrowhead.
