@@ -5,7 +5,7 @@ knowledge graph; the evidence docks in the language model (the one dark panel), 
 loop replays the reading: beam, bars, lens, graph path, answer."""
 from html import escape
 
-from figkit import Figure, curve, f, hdr, icon, legend, svg
+from figkit import Figure, curve_d, f, hdr, icon, legend, svg
 
 T_LOOP = 10.4
 LENS_S = 1.8  # lens magnification
@@ -21,9 +21,12 @@ KEPT_PAGES = "[p. 4] [p. 6] [p. 2]"
 # multi-hop path through illustrative entities, and the relation on each hop
 HOPS = ["Ni-rich NMC", "Li/Ni mixing", "Mg doping", "cycle stability"]
 RELS = ["shows", "suppressed by", "improves"]
-ANSWER = {"wide": [("Mg doping suppresses", ""), ("Li/Ni mixing ", "[p. 4]"), ("and keeps more", ""), ("capacity ", "[p. 6]")],
-          "narrow": [("Mg doping suppresses Li/Ni", ""), ("mixing ", "[p. 4]"), ("and keeps more capacity ", "[p. 6]")]}
-READING = ["[p. 6] Mg-doped cells", "keep more capacity"]
+# answer lines: (text, citation, text after it)
+ANSWER = {"wide": [("Mg doping suppresses", "", ""), ("Li/Ni mixing ", "[p. 4]", ";"), ("doped cells retain", "", ""),
+                   ("more capacity ", "[p. 6]", "")],
+          "narrow": [("Mg doping suppresses Li/Ni", "", ""), ("mixing ", "[p. 4]", "; doped cells"),
+                     ("retain more capacity ", "[p. 6]", "")]}
+READING = ["[p. 6] Mg-doped cells", "retain more capacity"]
 LABEL = ("Reading the literature: LR 1.1 turns a question into up to five queries to Semantic Scholar and Google "
          "Scholar, with arXiv as a fallback, merges and ranks the results lexically and downloads the top papers. "
          "Each PDF's page text is split into overlapping chunks of about 1,200 characters and ranked by BM25; the top "
@@ -31,9 +34,10 @@ LABEL = ("Reading the literature: LR 1.1 turns a question into up to five querie
          "vision-language model reads the top pages, charts included. With a knowledge-graph source, a graph neural "
          "network follows a multi-hop path across the graph. A language model writes the answer from this evidence, "
          "citing pages as [p. N]. Scores and the example are illustrative.")
-LEGEND = [("flow", "evidence to the answer"), ("dash", "with a graph source"), ("amber", "skipped: 2 per page")]
+LEGEND = [("flow", "evidence to the answer"), ("dash", "optional · fallback"), ("amber", "skipped: over 2 per page")]
 NOTE = "values are illustrative"
 LATE = ("chunks", "reading", "graph", "answer")  # connectors into the panel and the answer
+EVIDENCE = ("chunks", "reading", "answer")  # solid teal in the static frame (legend: evidence to the answer)
 
 
 def _note(x, y):
@@ -43,14 +47,10 @@ def _note(x, y):
 def _flow(d, key, dashed=False, arrow=True):
     """Connector plus its teal flow overlay (hidden in the static frame), which the loop runs at FT[key]."""
     late = " f-literature-late" if key in LATE else ""  # drawn with the panel in the intro
-    cls = "cv f-literature-in" + late + (" f-literature-opt" if dashed else "")
+    ev = " f-literature-ev" if key in EVIDENCE else ""
+    cls = "cv f-literature-in" + late + ev + (" f-literature-opt" if dashed else "")
     m = ' marker-end="url(#arr)"' if arrow else ""
     return f'<path class="{cls}" d="{d}"{m}/><path class="f-literature-flow" d="{d}" data-t="{FT[key]}" opacity="0"/>'
-
-
-def _cd(x1, y1, x2, y2):
-    """Path data of figkit.curve (horizontal tangents)."""
-    return curve(x1, y1, x2, y2).split(' d="')[1].split('"')[0]
 
 
 def _vd(x1, y1, x2, y2):
@@ -149,15 +149,16 @@ def _rows(x, y, w, pitch, rh):
 
 
 def _thumbs(x, y, n, tw, th, gap):
-    """Page images ranked by ColSmol-500M; the top two (teal) are read."""
+    """Page images ranked by ColSmol-500M, lowest rank on the left, so the top page (teal, the one read below) sits
+    next to the chart it leads to."""
     P = []
     for k in range(n):
-        tx = x + k * (tw + gap)
+        tx, rank = x + k * (tw + gap), n - k
         top = (f'<rect class="f-literature-fig" x="{f(tx + 5)}" y="{f(y + 6)}" width="{tw - 10}" height="{f(th * .34)}" rx="1"/>'
-               if k == 0 else _lines(tx + 5, y + 8, tw - 10, 2, 6))
-        P.append(f'<g class="f-literature-thumb{" on" if k < 2 else ""}"><rect x="{f(tx)}" y="{f(y)}" width="{tw}" height="{th}" rx="3"/>'
+               if rank == 1 else _lines(tx + 5, y + 8, tw - 10, 2, 6))
+        P.append(f'<g class="f-literature-thumb{" on" if rank == 1 else ""}"><rect x="{f(tx)}" y="{f(y)}" width="{tw}" height="{th}" rx="3"/>'
                  f'{top}{_lines(tx + 5, y + th * .55, tw - 18, 2, 6)}'
-                 f'<text class="f-literature-rank" x="{f(tx + tw - 4)}" y="{f(y + th - 4)}" text-anchor="end">{k + 1}</text></g>')
+                 f'<text class="f-literature-rank" x="{f(tx + tw - 4)}" y="{f(y + th - 4)}" text-anchor="end">{rank}</text></g>')
     return "".join(P)
 
 
@@ -227,8 +228,8 @@ def _panel(pre, x, y, w, h, docks, ty):
 def _answer(pre, x, y, w, h, variant, tail_x, tail_up):
     """Speech bubble with the cited answer; its text sits in a clip rect the loop widens, so the answer writes in."""
     t = "".join(f'<text class="f-literature-at" x="{f(x + 16)}" y="{f(y + 56 + 21 * k)}">{escape(s)}'
-                + (f'<tspan class="f-literature-cite">{c}</tspan>' if c else "") + '</text>'
-                for k, (s, c) in enumerate(ANSWER[variant]))
+                + (f'<tspan class="f-literature-cite">{c}</tspan>' if c else "") + f'{escape(after)}</text>'
+                for k, (s, c, after) in enumerate(ANSWER[variant]))
     r = 14
     if tail_up:
         top = f"H{f(tail_x - 9)} L{f(tail_x)},{f(y - 12)} L{f(tail_x + 9)},{f(y)} "
@@ -259,9 +260,9 @@ def _wide():
     P += [_chip(30, 200 + 36 * k, 180, 30, t, dashed) for k, (t, dashed) in enumerate(SOURCES)]
     P.append('<text class="sub f-literature-note" x="30" y="326">merged · de-duplicated</text>'
              '<text class="sub f-literature-note" x="30" y="346">lexical rank · top 5</text>')
-    P += [f'<path class="cv f-literature-merge" d="{_cd(210, 215 + 36 * k, 246, 200)}"' + (' marker-end="url(#arr)"/>' if k == 1 else '/>')
+    P += [f'<path class="cv f-literature-merge" d="{curve_d(210, 215 + 36 * k, 246, 200)}"' + (' marker-end="url(#arr)"/>' if k == 1 else '/>')
           for k in range(3)]
-    P.append(f'<path class="f-literature-flow" d="{_cd(210, 251, 246, 200)}" data-t="{FT["merge"]}" opacity="0"/>')
+    P.append(f'<path class="f-literature-flow" d="{curve_d(210, 251, 246, 200)}" data-t="{FT["merge"]}" opacity="0"/>')
     sx, sy, sw, sh = 252, 74, 128, 180
     P.append(_stack(pre, sx, sy, sw, sh))
     # text chunks ranked by BM25
@@ -275,14 +276,14 @@ def _wide():
              f'<text class="lbl f-literature-note" x="{rx - 6}" y="{f(cut_y + 4)}" text-anchor="end">top k</text>')
     # page images: ranked, the top page read through the lens
     P.append(hdr(30, 384, "PAGE IMAGES"))
-    P.append(_flow(_vd(316, sy + sh + 8, 186, 396), "images"))
-    P.append(_thumbs(30, 402, 5, 30, 42, 8))
+    P.append(_flow(_vd(316, sy + sh + 8, 147, 396), "images"))  # into the middle of the ranked strip
+    P.append(_thumbs(56, 402, 5, 30, 42, 8))
     P.append('<text class="sub f-literature-note" x="30" y="470">ColSmol-500M ranks</text>'
              '<text class="sub f-literature-note" x="30" y="490">the page images</text>')
-    P.append(_flow(_cd(212, 423, 262, 448), "thumbs"))
+    P.append(_flow(curve_d(242, 423, 262, 448), "thumbs"))  # from the top-ranked page
     cx_, cy_, cw, ch = 266, 380, 214, 150
     P.append(_chart_page(pre, cx_, cy_, cw, ch, (cx_ + cw - 56, cy_ + 80, 34, 96)))
-    P.append(_flow(_cd(cx_ + cw + 4, 448, 520, 448), "chart"))
+    P.append(_flow(curve_d(cx_ + cw + 4, 448, 520, 448), "chart"))
     P.append(_reading(524, 380, 236, 150))
     # knowledge graph
     P.append(hdr(30, 578, "KNOWLEDGE GRAPH · GNN"))
@@ -298,9 +299,12 @@ def _wide():
     px, py, pw, ph = 862, 236, 208, 420
     docks = [(312, "text chunks", KEPT_PAGES, False), (426, "page readings", "[p. 6]", False),
              (572, "graph path", "3 hops", True)]
-    P.append(_flow(_cd(rx + rw + 8, 150, px - 4, 336), "chunks"))
-    P.append(_flow(_cd(764, 448, px - 4, 450), "reading"))
-    P.append(_flow(_cd(668, 630, px - 4, 596), "graph", dashed=True))
+    # a bracket gathers the rows above the cut (the top k); the evidence leaves from its middle
+    bt, bb = ry0 + 2, ry0 + 4 * pitch + 28
+    P.append(f'<path class="f-literature-brk" d="M{rx + rw + 4},{bt} h5 V{bb} h-5"/>')
+    P.append(_flow(curve_d(rx + rw + 9, (bt + bb) / 2, px - 4, 336), "chunks"))
+    P.append(_flow(curve_d(764, 448, px - 4, 450), "reading"))
+    P.append(_flow(curve_d(668, 630, px - 4, 596), "graph", dashed=True))
     P.append('<text class="lbl f-literature-optlbl" x="852" y="660" text-anchor="end">with a graph source</text>')
     P.append(_panel(pre, px, py, pw, ph, docks, 268))
     # the answer
@@ -348,7 +352,7 @@ def _narrow():
     P.append(f'<text class="sub f-literature-note" x="344" y="{ty + 17}" text-anchor="end">ColSmol-500M ranks</text>'
              f'<text class="sub f-literature-note" x="344" y="{ty + 37}" text-anchor="end">the page images</text>')
     cy_ = ty + 70
-    P.append(_flow(f"M{X + 15},{ty + 44} V{cy_ - 4}", "thumbs"))
+    P.append(_flow(f"M{X + 3 * 38 + 15},{ty + 44} V{cy_ - 4}", "thumbs"))  # from the top-ranked page (rightmost)
     P.append(_chart_page(pre, X, cy_, 344 - X, 140, (344 - 70, cy_ + 76, 36, 150)))
     P.append(_flow(f"M190,{cy_ + 142} V{cy_ + 162}", "chart"))
     rdy = cy_ + 166
@@ -360,15 +364,17 @@ def _narrow():
     g = y2 + 40
     pts = [(64, g + 34), (296, g + 84), (64, g + 160), (296, g + 212)]
     bg = [(24, g + 100), (150, g + 16), (190, g + 92), (330, g + 140), (176, g + 238), (40, g + 232), (330, g + 24)]
-    edges = [(0, 4), (0, 5), (1, 10), (1, 7), (1, 6), (2, 4), (2, 6), (3, 7), (5, 6), (8, 9), (5, 10)]
+    edges = [(0, 4), (0, 5), (1, 10), (1, 7), (1, 6), (2, 4), (3, 7), (5, 6), (8, 9), (5, 10)]
     P.append(_graph(pts, bg, edges,
                     lbl_pos=[(64, g + 12, "middle"), (344, g + 60, "end"), (64, g + 190, "middle"), (330, g + 242, "end")],
-                    rel_pos=[(196, g + 48, "start"), (196, g + 146, "start"), (196, g + 176, "start")]))
+                    rel_pos=[(196, g + 48, "start"), (162, g + 117, "end"), (196, g + 176, "start")]))
     # the language model, fed by the right rail (text chunks, page readings) and the graph path
     py = g + 290
     docks = [(py + 66, "text chunks", KEPT_PAGES, False), (py + 120, "page readings", "[p. 6]", False),
              (py + 174, "graph path", "3 hops", True)]
-    P.append(_flow(f"M348,{y0 + 27} H352 V{py + 30} H348", "chunks"))
+    bt, bb = y0 + 16, y0 + 14 + 4 * 34 + 26  # bracket over the rows above the cut (the top k)
+    P.append(f'<path class="f-literature-brk" d="M347,{bt} H352 V{bb} H347"/>')
+    P.append(_flow(f"M352,{bb} V{py + 30} H348", "chunks"))
     P.append(_flow(f"M348,{rdy + 75} H352 V{py + 30} H348", "reading"))
     P.append(_flow(f"M305,{g + 212} C340,{g + 212} 340,{g + 212} 340,{g + 240} V{py - 4}", "graph", dashed=True))
     P.append(f'<text class="lbl f-literature-optlbl" x="330" y="{g + 272}" text-anchor="end">with a graph source</text>')
@@ -441,8 +447,11 @@ JS = """MAFig.register("literature", function (root, variant) {
     loop.fromTo(el, {drawSVG: "0%% 14%%", opacity: 1}, {drawSVG: "86%% 100%%", opacity: 1, duration: .6, ease: "power1.in"}, t)
       .to(el, {opacity: 0, duration: .15}, t + .6);
   });
-  loop.fromTo(lens, {x: -travel}, {x: 0, duration: 2.2, ease: "sine.inOut"}, 2.2)
-    .fromTo(mag, {x: travel * S}, {x: 0, duration: 2.2, ease: "sine.inOut"}, 2.2)
+  // the lens glides out along the chart and back (no jump at the loop wrap); the magnified copy counter-moves
+  loop.to(lens, {x: -travel, duration: 1.1, ease: "sine.inOut"}, 2.2)
+    .to(lens, {x: 0, duration: 1.1, ease: "sine.inOut"}, 3.3)
+    .to(mag, {x: travel * S, duration: 1.1, ease: "sine.inOut"}, 2.2)
+    .to(mag, {x: 0, duration: 1.1, ease: "sine.inOut"}, 3.3)
     .fromTo(q(".f-literature-rd"), {opacity: .2}, {opacity: 1, duration: .4}, 4.4)
     .fromTo(walker, {x: 0, y: 0, opacity: 0}, {x: 0, y: 0, opacity: 1, duration: .2}, 4.85);
   for (var i = 1; i < xy.length; i++) {

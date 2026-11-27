@@ -572,7 +572,9 @@ class SiteTests(unittest.TestCase):
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
             self.assertNotRegex(body, r"<animate|[Vv]alidat|opt-in")
-        self.assertNotIn("opt-in", sec)  # page images are read by default (C47, C53)
+        import html
+        flat = re.sub(r"[\u2010-\u2013]", "-", html.unescape(sec)).replace("\u2060", "")  # non-breaking hyphens too
+        self.assertNotRegex(flat, r"(?i)opt-in")  # page images are read by default (C47, C53)
         cards = re.findall(r'<article class="card"[^>]*>', sec)
         self.assertEqual(len(cards), 6)  # papers, text, page images, knowledge graph, knowledge base, Deep Research
         for card in cards:

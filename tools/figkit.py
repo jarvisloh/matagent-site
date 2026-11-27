@@ -62,12 +62,17 @@ def card(x, y, w, h, title, sub="", cls=""):
             f'<text class="ttl" x="{f(x + 14)}" y="{f(y + 24)}">{escape(title)}</text>{s}</g>')
 
 
-def curve(x1, y1, x2, y2, cls="cv", arrow=True, attrs=""):
-    """Horizontal-tangent cubic Bezier from (x1, y1) to (x2, y2); attrs is extra raw attribute text, e.g. 'opacity="0"'."""
+def curve_d(x1, y1, x2, y2):
+    """Path data of a horizontal-tangent cubic Bezier from (x1, y1) to (x2, y2)."""
     dx = max(abs(x2 - x1) * 0.5, 12) * (1 if x2 >= x1 else -1)
+    return f"M{f(x1)},{f(y1)} C{f(x1 + dx)},{f(y1)} {f(x2 - dx)},{f(y2)} {f(x2)},{f(y2)}"
+
+
+def curve(x1, y1, x2, y2, cls="cv", arrow=True, attrs=""):
+    """<path> of curve_d; attrs is extra raw attribute text, e.g. 'opacity="0"'."""
     m = ' marker-end="url(#arr)"' if arrow else ""
     a = f" {attrs}" if attrs else ""
-    return f'<path class="{cls}" d="M{f(x1)},{f(y1)} C{f(x1 + dx)},{f(y1)} {f(x2 - dx)},{f(y2)} {f(x2)},{f(y2)}"{m}{a}/>'
+    return f'<path class="{cls}" d="{curve_d(x1, y1, x2, y2)}"{m}{a}/>'
 
 
 def hdr(x, y, text, anchor="start"):
