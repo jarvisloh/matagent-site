@@ -892,6 +892,78 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    # (record tag, detail) in the order the slips land in the ledger (C28, C68)
+    RECORD_SLIPS = [("INPUT", "secrets redacted"), ("CHECKPOINT", "after step 1"), ("CHECKPOINT", "step 2 failed"),
+                    ("CHECKPOINT", "after step 2"), ("CHECKPOINT", "after step 3"), ("OUTPUTS · METRICS", ""),
+                    ("TRACE · ERRORS", "")]
+
+    def test_fig_record(self):
+        import html
+        sec = re.search(r'<section id="record".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>On the record, under your control</h2>", sec)
+        self.assertIn('<p class="kicker">10</p>', sec)
+        cap = html.unescape(re.search(r"<figcaption>(.*?)</figcaption>", sec, flags=re.S).group(1))
+        for want in ("ask", "re-runs", "approves"):
+            self.assertIn(want, cap)
+        fig = re.search(r'<figure class="fig" data-fig="record" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig)
+            self.assertTrue(tag, v)
+            label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            self.assertGreaterEqual(len(label), 20)
+            for word in ("ask", "human review", "approves", "re-runs", "not re-run", "checkpoint", "secrets redacted",
+                         "event stream", "append-only", "read-only", "illustrative"):
+                self.assertIn(word, label, (v, word))
+            self.assertNotIn("stage gate", label.lower())
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body)))
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the scope
+            # the trace scrolls inside a clipped screen; the pause is an amber flat-line
+            self.assertEqual(len(re.findall(r'<g clip-path="url\(#[\w-]+\)"><g class="f-record-scroll"', body)), 1, v)
+            self.assertEqual(body.count('class="f-record-flat"'), 1, v)
+            for want in ("run starts", "step 1", "step 2 fails", "paused for", "approved", "step 2 re-runs", "step 3",
+                         "run complete", "full", "append-only", "read-only", "halt", "ask", "skip", "keep",
+                         "schema", "result count", "keywords", "thresholds", "latency",
+                         "pause", "resume", "cancel", "replay", "report", "EVENT STREAM"):
+                self.assertIn(want, shown, (v, want))
+            # timed reveals: every timed item carries its event (data-u) and reveal time (data-t), never before its event
+            timed = {html.unescape(re.sub(r"<[^>]+>", "", t)): (float(u), float(s)) for u, s, t in
+                     re.findall(r'<text[^>]*data-u="([\d.]+)" data-t="([\d.]+)"[^>]*>(.*?)</text>', body)}
+            self.assertLess(timed["approved"][1], timed["step 2 re-runs"][1], v)  # approval before the re-run
+            self.assertLess(timed["step 2 fails"][1], timed["approved"][1], v)
+            slips = re.findall(r'<g class="f-record-slip[^"]*" data-u="([\d.]+)" data-t="([\d.]+)"[^>]*>(.*?)</g>', body, flags=re.S)
+            self.assertEqual(len(slips), len(self.RECORD_SLIPS), v)
+            ts = [float(s) for _, s, _ in slips]
+            self.assertEqual(ts, sorted(ts), v)
+            for (u, s, inner), (tg, det) in zip(slips, self.RECORD_SLIPS):
+                txt = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", inner)))
+                self.assertIn(tg, txt, (v, tg))
+                self.assertIn(det, txt, (v, det))
+            self.assertIn("f-record-slip amb", body)  # the failed step's checkpoint is marked amber
+            # the trace scrolls u = 0..100 past the write head in data-d seconds: nothing shows before its event emerges
+            d = float(re.search(r'class="f-record-scroll"[^>]*data-d="([\d.]+)"', body).group(1))
+            for txt, (u, s) in timed.items():
+                self.assertGreaterEqual(s, u / 100 * d - 1e-6, (v, txt))
+            for u, s, _ in slips:
+                self.assertGreater(float(s), float(u) / 100 * d, (v, u))
+            self.assertEqual(body.count('class="f-record-tick'), 2 * body.count('class="f-record-tick"'), v)  # base + lit per event
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat|[Ss]tage gate")
+            self.assertNotIn("{", body)
+        self.assertRegex(css(), r"\.f-record-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
+        for cid in ("C26", "C27", "C28", "C29", "C68"):
+            self.assertIn(cid, allc)
+        js = re.search(r'MAFig\.register\("record".*?<!-- figjs:record:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
         p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"

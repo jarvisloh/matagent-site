@@ -118,6 +118,7 @@ _SWATCH = {
     "cell": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-cell"/>',
     "okc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-okc"/><path d="M{x + 6.5},-3.5 l3,3 l5.5,-6.5" class="lg-tick"/>',
     "ring": lambda x: f'<circle cx="{x + 11}" cy="-4" r="4.5" class="lg-ring"/>',
+    "dia": lambda x: f'<path d="M{x + 11},-11 l7,7 l-7,7 l-7,-7 z" class="lg-dia"/>',
     "xc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-xc"/><path d="M{x + 7.5},-7.5 l7,7 M{x + 14.5},-7.5 l-7,7" class="lg-x"/>',
 }
 
