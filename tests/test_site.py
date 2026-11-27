@@ -732,7 +732,7 @@ class SiteTests(unittest.TestCase):
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
             self.assertNotRegex(body, r"<animate|[Vv]alidat")
-            self.assertNotRegex(body, r"\{\w*\(")  # no uninterpolated f-string placeholder, e.g. y="{f(RY)}"
+            self.assertNotIn("{", body)  # the SVG has no braces: catches an uninterpolated f-string placeholder
             shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S)))
             for want in ("INCAR", "POSCAR", "KPOINTS", "POTCAR", "PENDING", "RUNNING", "COMPLETED", "Approve",
                          "Birch–Murnaghan", "OUTCAR", "DOSCAR"):
