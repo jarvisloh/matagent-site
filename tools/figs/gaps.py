@@ -7,7 +7,7 @@ and the loop replays the drop-and-fill and the bracket stretch."""
 from html import escape
 import math
 
-from figkit import Figure, curve_d, f, hdr, icon, legend, svg
+from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
 T_LOOP = 11.6
 A0 = 5.8  # loop: panel b replays first (after a hold on the finished frame), then panel a from A0
@@ -35,9 +35,9 @@ DEV_MAX = 60.0  # the deviation axis runs 0-60 % on a square-root scale
 TICKS = [0, 1, 10, 20, 50]
 LABEL = ("Panel a, gap closure: GAR 2.1 collects gaps by rules, without a language model, from the domain's gap "
          "checklist, the database query's gap list and database coverage; record-count gaps are listed separately "
-         "and a few gap terms join the paper search. GAR runs one round per run and stops at its 600\u202fs limit. Up to "
+         "and a few gap terms join the paper search. GAR runs one round per run and stops at its run limit, 600\u202fs by default. Up to "
          "ten papers, the PDFs read first and then the search results, drop into the checklist grid, each shown to "
-         "the judge as its title and the first 600 characters of its abstract. In one call at temperature 0 a "
+         "the judge as its title and the first 600 characters (by default) of its abstract. In one call a "
          "language model judges every gap: a gap is closed only when the model names a paper and gives a quote "
          "containing one of the gap's own terms, and the quote is not checked against the abstract. The closure "
          "score is 100 × closed ÷ judged, a model-assisted measure of the run's own output, with a word-overlap "
@@ -46,13 +46,8 @@ LABEL = ("Panel a, gap closure: GAR 2.1 collects gaps by rules, without a langua
          "to 10\u202f% (adjustable) partial agreement and above that a contradiction, rated low, medium or high; values "
          "whose units differ are not compared, and, when one is available, a language model re-extracts conflicting "
          "findings. The gaps, values and score are illustrative.")
-LEGEND = [("dot", "closed: paper named, quoted"), ("amber", "rejected · contradiction"),
-          ("dash", "optional · fallback")]
-NOTE = "values are illustrative"
-
-
-def _note(x, y):
-    return f'<g class="legend" transform="translate({f(x)},{f(y)})"><text x="0" y="0">{NOTE}</text></g>'
+LEGEND = [("tick", "closed: paper named, quoted"), ("cell", "empty: no paper named"),
+          ("amber", "rejected · contradiction"), ("dash", "optional · fallback")]
 
 
 LATE = "cv f-gaps-in f-gaps-late"  # connectors into and out of the judge, drawn with the panel
@@ -94,12 +89,15 @@ def _paper(cx, y, n, read):
 
 def _check(x, y, state):
     """Checklist box: a teal tick when closed, an amber cross when rejected, empty when open."""
-    mark = ""
-    if state == "closed":
-        mark = f'<path class="f-gaps-tick" d="M{f(x + 4.5)},{f(y + 9.5)} l3.5,3.5 l6,-7"/>'
-    elif state == "rejected":
-        mark = f'<path class="f-gaps-tick amb" d="M{f(x + 5)},{f(y + 5)} l8,8 M{f(x + 13)},{f(y + 5)} l-8,8"/>'
-    return f'<g class="f-gaps-box {state}"><rect x="{f(x)}" y="{f(y)}" width="18" height="18" rx="4"/>{mark}</g>'
+    box = f'<rect class="f-gaps-box" x="{f(x)}" y="{f(y)}" width="18" height="18" rx="4"/>'
+    if state == "open":
+        return box
+    tick = (f'M{f(x + 4.5)},{f(y + 9.5)} l3.5,3.5 l6,-7' if state == "closed" else
+            f'M{f(x + 5)},{f(y + 5)} l8,8 M{f(x + 13)},{f(y + 5)} l-8,8')
+    a = "" if state == "closed" else " amb"
+    # the verdict's tint and mark sit over the neutral box, so they appear and clear with the verdict
+    return (box + f'<rect class="f-gaps-boxfill{a}" x="{f(x)}" y="{f(y)}" width="18" height="18" rx="4"/>'
+            f'<path class="f-gaps-tick{a}" d="{tick}"/>')
 
 
 def _grid(gx, y0, cp, cs, rp, box_x, lbl_x, wide):
@@ -115,11 +113,11 @@ def _grid(gx, y0, cp, cs, rp, box_x, lbl_x, wide):
         for k in range(N_PAPERS):
             x = gx + k * cp
             on = paper is not None and k == paper - 1
-            cls = {"closed": " on", "rejected": " amb"}.get(state, "") if on else ""
-            P.append(f'<rect class="f-gaps-cell{cls}" x="{f(x)}" y="{f(cy)}" width="{cs}" height="{cs}" rx="5"/>')
-            if on:
+            P.append(f'<rect class="f-gaps-cell" x="{f(x)}" y="{f(cy)}" width="{cs}" height="{cs}" rx="5"/>')
+            if on:  # the verdict overlays the neutral cell: its tint and the quote mark pop and clear together
                 qx, qy = x + cs / 2, cy + cs / 2 + 13
-                q = f'<text class="f-gaps-qm" x="{f(qx)}" y="{f(qy)}" text-anchor="middle">“</text>'
+                q = (f'<rect class="f-gaps-qfill" x="{f(x)}" y="{f(cy)}" width="{cs}" height="{cs}" rx="5"/>'
+                     f'<text class="f-gaps-qm" x="{f(qx)}" y="{f(qy)}" text-anchor="middle">“</text>')
                 if state == "closed":
                     P.append(f'<g class="f-gaps-quote" data-row="{i}">{q}</g>')
                 else:
@@ -143,8 +141,7 @@ def _odo(pre, key, x, y, values, cls, pitch, clip_w, clip_h, anchor="start"):
 
 def _panel(pre, x, y, w, h, wide):
     """The closure judge, the figure's one dark panel."""
-    subs = ["judges closure", "one call, all gaps", "temperature 0"] if wide else \
-        ["judges closure · one call", "all gaps · temperature 0"]
+    subs = ["judges closure", "one call, all gaps"]
     P = [f'<g class="f-gaps-judge"><rect class="panel" x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="14" '
          f'style="fill:url(#{pre}-pnl)"/>{icon("evaluate", x + 16, y + 17, "ic f-gaps-pic")}'
          f'<text class="f-gaps-lmt" x="{f(x + 42)}" y="{f(y + 32)}">Language model</text>']
@@ -249,13 +246,13 @@ def _vchip(x, y, w, h, value, note):
     return f'<g class="card f-gaps-vc"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="8"/>{t}</g>'
 
 
-WIDE = {"W": 1100, "H": 934}
+WIDE = {"W": 1100, "H": 958}
 
 
 def _wide():
     W, H, pre = WIDE["W"], WIDE["H"], "gaps-w"
     P = [_defs(pre), hdr(30, 34, "a · GAP CLOSURE · GAR 2.1"),
-         '<text class="lbl f-gaps-note" x="1070" y="34" text-anchor="end">one round per run · stops at 600\u202fs</text>']
+         '<text class="lbl f-gaps-note" x="1070" y="34" text-anchor="end">one round per run · 600\u202fs limit (default)</text>']
     # gaps, by rules
     P.append(hdr(30, 70, "GAPS · BY RULES") + '<text class="lbl f-gaps-note" x="30" y="88">no language model</text>')
     P += [_chip(30, 100 + 38 * k, 160, 30, t) for k, t in enumerate(RULES)]
@@ -269,22 +266,22 @@ def _wide():
              '<text class="sub f-gaps-note" x="54" y="330">the paper search</text>')
     # papers, then the grid
     P.append(hdr(232, 70, "LITERATURE GAPS") + hdr(gx, 70, "≤ 10 PAPERS")
-             + f'<text class="lbl f-gaps-note" x="{gx + N_PAPERS * cp - 6}" y="70" text-anchor="end">title + first 600 chars</text>'
+             + f'<text class="lbl f-gaps-note" x="{gx + N_PAPERS * cp - 6}" y="70" text-anchor="end">title + first 600 chars (default)</text>'
              f'<text class="lbl f-gaps-note" x="{gx}" y="90">read first</text>'
              f'<text class="lbl f-gaps-note" x="{gx + N_READ * cp}" y="90">then search results</text>')
     P.append(_grid(gx, y0, cp, cs, rp, 232, 258, True))
     P += [_paper(gx + k * cp + cs / 2, 100, k + 1, k < N_READ) for k in range(N_PAPERS)]
     gr = gx + (N_PAPERS - 1) * cp + cs  # grid right edge
     # the judge, the verdicts back into the grid, and the score
-    px, py, pw, ph = 866, 56, 204, 220
+    px, py, pw, ph = 866, 56, 204, 200
     P.append(_flow(curve_d(gr + 4, 117, px - 4, 117), A0 + 1.6, LATE))
     P.append(_flow(curve_d(px - 4, 236, gr + 6, 236), A0 + 2.0, LATE)
-             + f'<text class="lbl f-gaps-note" x="{f((gr + px) / 2)}" y="226" text-anchor="middle">verdicts</text>')
+             + f'<text class="lbl f-gaps-vlbl" x="{f((gr + px) / 2)}" y="226" text-anchor="middle">verdicts</text>')
     P.append(_panel(pre, px, py, pw, ph, True))
     P.append(_score(pre, px, 290, pw, 140, True))
     tail = gx + (GAPS[4][2] - 1) * cp + cs / 2
     P.append(_bubble(gx, 350, gr - gx, 36, tail))
-    P.append(f'<text class="lbl f-gaps-note" x="{gx}" y="410">has a gap term · not checked against the abstract</text>')
+    P.append(f'<text class="lbl f-gaps-bnote" x="{gx}" y="410">has a gap term · not checked against the abstract</text>')
     # panel b
     P.append('<path class="f-gaps-div" d="M30,440 H1070"/>')
     P.append(hdr(30, 474, "b · AGREEMENT · LCA 5.1")
@@ -299,7 +296,8 @@ def _wide():
     x0, L = 540, 510
     ry0, rpb, ch = 604, 52, 40
     bt, bb = ry0 - 6, ry0 + (len(PAIRS) - 1) * rpb + ch + 6
-    P.append(_bands(x0, L, bt, bb - bt))
+    nc = sum(p[3] is not None for p in PAIRS)  # compared pairs come first; the bands stop above "not compared"
+    P.append(_bands(x0, L, bt, ry0 + (nc - 1) * rpb + ch + 6 - bt))
     P.append(f'<path class="cv f-gaps-opt" d="M{x0 + L},{bt + 2} C1060,{bt + 2} 1060,{bt - 6} 1060,{bt - 18} V{sy + 52}" marker-end="url(#arr)"/>')
     for word, sub, a, b in (("consensus", "≤ 1\u202f%", 0, 1), ("partial ≤ 10\u202f%", "adjustable 2–30\u202f%", 1, 10),
                             ("contradiction > 10\u202f%", None, 10, DEV_MAX)):
@@ -324,7 +322,7 @@ def _wide():
                 P.append(f'<text class="lbl amb f-gaps-flag" x="{f(_dx(x0, L, 20) - 8)}" y="{f(mid - 8)}" '
                          f'text-anchor="end">different methods: flagged</text>')
     P.append(f'<text class="lbl f-gaps-bl" x="{x0 - 14}" y="{bb + 30}" text-anchor="end">relative deviation, √ scale</text>')
-    P.append(legend(LEGEND, 30, H - 14) + _note(860, H - 14))
+    P.append(legend(LEGEND, 30, H - 38) + note(30, H - 12))
     return svg(W, H, "".join(P), "wide", LABEL)
 
 
@@ -334,7 +332,7 @@ NARROW = {"W": 360}  # the height follows the layout
 def _narrow():
     W, pre = NARROW["W"], "gaps-n"
     P = [_defs(pre), hdr(16, 24, "a · GAP CLOSURE · GAR 2.1"),
-         '<text class="lbl f-gaps-note" x="16" y="44">one round per run · stops at 600\u202fs</text>']
+         '<text class="lbl f-gaps-note" x="16" y="44">one round per run · 600\u202fs limit (default)</text>']
     P.append(hdr(16, 78, "GAPS · BY RULES")
              + '<text class="lbl f-gaps-note" x="344" y="78" text-anchor="end">no language model</text>')
     P.append(_chip(16, 90, 160, 30, RULES[0]) + _chip(184, 90, 160, 30, RULES[1]) + _chip(16, 126, 160, 30, RULES[2]))
@@ -344,7 +342,7 @@ def _narrow():
              '<text class="sub f-gaps-note" x="64" y="217">paper search</text>')
     gx, cp, cs, rp = 40, 31, 26, 62
     P.append(hdr(gx, 244, "≤ 10 PAPERS")
-             + '<text class="lbl f-gaps-note" x="344" y="244" text-anchor="end">title + 600 chars</text>'
+             + '<text class="lbl f-gaps-note" x="344" y="244" text-anchor="end">title + 600 chars (default)</text>'
              f'<text class="lbl f-gaps-note" x="{gx}" y="262">read first</text>'
              f'<text class="lbl f-gaps-note" x="{gx + N_READ * cp}" y="262">then search results</text>')
     y0 = 340
@@ -353,13 +351,13 @@ def _narrow():
     gb = y0 + (len(GAPS) - 1) * rp + cs  # grid bottom
     tail = gx + (GAPS[4][2] - 1) * cp + cs / 2
     P.append(_bubble(16, gb + 16, 328, 36, tail))
-    P.append(f'<text class="lbl f-gaps-note" x="344" y="{gb + 72}" text-anchor="end">has a gap term · not checked</text>'
-             f'<text class="lbl f-gaps-note" x="344" y="{gb + 90}" text-anchor="end">against the abstract</text>')
+    P.append(f'<text class="lbl f-gaps-bnote" x="344" y="{gb + 72}" text-anchor="end">has a gap term · not checked</text>'
+             f'<text class="lbl f-gaps-bnote" x="344" y="{gb + 90}" text-anchor="end">against the abstract</text>')
     py = gb + 116
     # papers and gaps down the right rail into the judge; verdicts up the left rail into the checklist
     P.append(_flow(f"M{gx + N_PAPERS * cp - 1},287 H352 V{py + 30} H348", A0 + 1.6, LATE))
     P.append(_flow(f"M12,{py + 30} H8 V{y0 + 2 * rp - 15} H13", A0 + 2.0, LATE)
-             + f'<text class="lbl f-gaps-note" x="24" y="{gb + 108}">verdicts</text>')
+             + f'<text class="lbl f-gaps-vlbl" x="24" y="{gb + 108}">verdicts</text>')
     P.append(_panel(pre, 16, py, 328, 200, False))
     sy = py + 220
     P.append(_score(pre, 16, sy, 328, 120, False))
@@ -388,13 +386,14 @@ def _narrow():
     for i, (prop, a, b, dev) in enumerate(PAIRS):
         y = r0 + i * rpn
         vals = f"{a[0]} · {b[0]}"
-        note = NOTES_N[i]
+        nt = NOTES_N[i]
         P.append(f'<g class="f-gaps-prow"><text class="f-gaps-prop" x="16" y="{f(y + 14)}">{escape(prop)}</text>'
                  f'<text class="sub f-gaps-val2" x="344" y="{f(y + 14)}" text-anchor="end">{escape(vals)}</text>'
-                 + (f'<text class="sub" x="344" y="{f(y + 35)}" text-anchor="end">{escape(note)}</text>' if note else "")
+                 + (f'<text class="sub" x="344" y="{f(y + 35)}" text-anchor="end">{escape(nt)}</text>' if nt else "")
                  + "</g>")
         line = y + 62
-        P.append(_bands(x0, L, line - 12, 16))
+        if dev is not None:
+            P.append(_bands(x0, L, line - 12, 16))
         if dev is None:
             P.append(f'<text class="lbl f-gaps-skip" x="{x0 + 6}" y="{f(line + 0)}">units differ: not compared</text>')
         else:
@@ -404,8 +403,8 @@ def _narrow():
     ay = r0 + len(PAIRS) * rpn + 2
     P.append(_axis(x0, L, ay, sev_y=ay + 42))
     P.append(f'<text class="lbl f-gaps-bl" x="16" y="{ay + 64}">relative deviation, √ scale</text>')
-    H = ay + 64 + 24 + 24 * 4
-    P.append("".join(legend([it], 16, H - 84 + 24 * k) for k, it in enumerate(LEGEND)) + _note(16, H - 12))
+    H = ay + 64 + 24 + 24 * 5
+    P.append("".join(legend([it], 16, H - 108 + 24 * k) for k, it in enumerate(LEGEND)) + note(16, H - 12))
     return svg(W, H, "".join(P), "narrow", LABEL)
 
 
@@ -415,7 +414,8 @@ JS = """MAFig.register("gaps", function (root, variant) {
   // layout read from the SVG before any from-state is applied
   var scan = one(".f-gaps-scan"), RP = +scan.getAttribute("data-pitch"), odo = q(".f-gaps-odo"),
     papers = q(".f-gaps-paper"), rows = q(".f-gaps-row"), quotes = q(".f-gaps-quote"), ticks = q(".f-gaps-tick"),
-    brks = q(".f-gaps-brk"), ends = q(".f-gaps-end"), devs = q(".f-gaps-dev"), bubble = one(".f-gaps-bubble");
+    brks = q(".f-gaps-brk"), ends = q(".f-gaps-end"), devs = q(".f-gaps-dev"), bubble = one(".f-gaps-bubble"),
+    fills = q(".f-gaps-boxfill"), bnote = q(".f-gaps-bnote");
   var odoTop = function (el) { return -(el.getAttribute("data-n") - 1) * el.getAttribute("data-pitch"); };
   var odoTopF = function (i, el) { return odoTop(el); };
   var len = function (i, el) { return -el.getAttribute("data-len"); };
@@ -428,6 +428,7 @@ JS = """MAFig.register("gaps", function (root, variant) {
     .from(q(".f-gaps-in:not(.f-gaps-late):not(.f-gaps-bconn)"), {drawSVG: 0, opacity: 0, duration: .5, stagger: .03}, .35)
     .from(q(".f-gaps-bconn"), {drawSVG: 0, opacity: 0, duration: .3, stagger: .1}, 2.35)
     .from(q(".f-gaps-late"), {drawSVG: 0, opacity: 0, duration: .5, stagger: .2}, 1.9)
+    .from(q(".f-gaps-vlbl"), {opacity: 0, duration: .3}, 2.2)
     .from(q(".f-gaps-bin, .f-gaps-note, .f-gaps-sic, .f-gaps-brk0"), {opacity: 0, duration: .4, stagger: .02}, .5)
     .from(rows, {opacity: 0, x: -8, duration: .3, stagger: .06}, .5)
     // the gaps are empty cells, then the papers drop into their columns
@@ -441,8 +442,10 @@ JS = """MAFig.register("gaps", function (root, variant) {
     .fromTo(odo, {y: odoTopF}, {y: odoTopF, duration: .01}, 0);
   // verdicts row by row: the quote mark fills the named cell, the box ticks, the odometers step
   rows.forEach(function (r, i) {
-    var t = 2.4 + i * .3, qm = root.querySelector('.f-gaps-quote[data-row="' + i + '"]'), tk = r.querySelector(".f-gaps-tick");
+    var t = 2.4 + i * .3, qm = root.querySelector('.f-gaps-quote[data-row="' + i + '"]'), tk = r.querySelector(".f-gaps-tick"),
+      bf = r.querySelector(".f-gaps-boxfill");
     if (qm) intro.from(qm, {scale: 0, opacity: 0, transformOrigin: "50% 50%", duration: .4, ease: "back.out(3)"}, t);
+    if (bf) intro.from(bf, {opacity: 0, duration: .2}, t + .1);
     if (tk) intro.from(tk, {drawSVG: 0, duration: .3, ease: "none"}, t + .15);
     var k = closedRows.indexOf(i);
     if (k >= 0) odo.forEach(function (o) {
@@ -450,6 +453,7 @@ JS = """MAFig.register("gaps", function (root, variant) {
     });
   });
   intro.from(bubble, {opacity: 0, scale: .92, transformOrigin: "50% 0%", duration: .45, ease: "back.out(2)"}, 4.0)
+    .from(bnote, {opacity: 0, duration: .3}, 4.2)
     .from(q(".f-gaps-step"), {opacity: 0, y: 8, duration: .35, stagger: .1}, 2.2)
     .from(q(".f-gaps-band, .f-gaps-key, .f-gaps-bl, .f-gaps-sev, .f-gaps-axis"), {opacity: 0, duration: .5, stagger: .01}, 2.6)
     .from(q(".f-gaps-prow"), {opacity: 0, x: -10, duration: .35, stagger: .08}, 2.7)
@@ -460,20 +464,25 @@ JS = """MAFig.register("gaps", function (root, variant) {
     .from(devs, {opacity: 0, duration: .3, stagger: .18}, 3.6)
     .from(q(".f-gaps-skip, .f-gaps-flag, .f-gaps-opt"), {opacity: 0, duration: .4}, 4.0)
     .from(q(".legend"), {opacity: 0, duration: .4}, 4.3);
-  // loop: after a hold on the finished frame the brackets retract and stretch again pair by pair; then the fills
-  // clear, the papers drop in again and a scan steps down the rows refilling the closed cells while the odometers tick. Every key in a fromTo start object is
-  // repeated in its end object (a loop wrap drops start-only keys). immediateRender off: the finished frame stays.
+  // loop: after a hold on the finished frame the brackets retract and stretch again pair by pair; then the verdicts
+  // clear, the papers drop in again and a scan steps down the rows refilling the named cells while the odometers
+  // tick. Every key in a fromTo start object is repeated in its end object (a loop wrap drops start-only keys).
+  // immediateRender off: the finished frame stays.
   var loop = gsap.timeline({repeat: -1, defaults: {immediateRender: false}});
-  loop.to(quotes, {opacity: 0, scale: 0, transformOrigin: "50% 50%", duration: .3}, A0)
-    .to(ticks, {drawSVG: "0%", duration: .3}, A0)
-    .to(bubble, {opacity: 0, duration: .3}, A0);
-  odo.forEach(function (o) { loop.to(o, {y: odoTop(o), duration: .6, ease: "power2.inOut"}, A0 + .1); });
-  loop.to(papers, {y: -6, opacity: 0, duration: .25, stagger: .03, ease: "power2.in"}, A0 + .4)
-    .fromTo(papers, {y: -24}, {y: 0, duration: .7, stagger: .06, ease: "bounce.out"}, A0 + .9)
-    .fromTo(papers, {opacity: 0}, {opacity: 1, duration: .15, stagger: .06, ease: "power1.in"}, A0 + 1.12)
-    .fromTo(scan, {y: 0, opacity: 0}, {y: 0, opacity: 1, duration: .2}, A0 + 2.1);
+  loop.to(quotes, {opacity: 0, scale: 0, transformOrigin: "50% 50%", duration: .3}, __A0__)
+    .to(ticks, {drawSVG: "0%", duration: .3}, __A0__)
+    .to(fills, {opacity: 0, duration: .3}, __A0__)
+    .to(bubble, {opacity: 0, duration: .3}, __A0__)
+    .to(bnote, {opacity: 0, duration: .3}, __A0__);
+  odo.forEach(function (o) { loop.to(o, {y: odoTop(o), duration: .6, ease: "power2.inOut"}, __A0__ + .1); });
+  loop.to(papers, {y: -6, opacity: 0, duration: .25, stagger: .03, ease: "power2.in"}, __A0__ + .4)
+    .fromTo(papers, {y: -24}, {y: 0, duration: .7, stagger: .06, ease: "bounce.out"}, __A0__ + .9)
+    .fromTo(papers, {opacity: 0}, {opacity: 1, duration: .15, stagger: .06, ease: "power1.in"}, __A0__ + 1.12)
+    .fromTo(scan, {y: 0, opacity: 0}, {y: 0, opacity: 1, duration: .2}, __A0__ + 2.1);
   rows.forEach(function (r, i) {
-    var t = A0 + 2.3 + i * .5, qm = root.querySelector('.f-gaps-quote[data-row="' + i + '"]'), tk = r.querySelector(".f-gaps-tick");
+    var t = __A0__ + 2.3 + i * .5, qm = root.querySelector('.f-gaps-quote[data-row="' + i + '"]'), tk = r.querySelector(".f-gaps-tick"),
+      bf = r.querySelector(".f-gaps-boxfill");
+    if (bf) loop.fromTo(bf, {opacity: 0}, {opacity: 1, duration: .2}, t + .1);
     if (i) loop.to(scan, {y: i * RP, duration: .25, ease: "power2.inOut"}, t - .3);
     if (qm) loop.fromTo(qm, {scale: 0, opacity: 0}, {scale: 1, opacity: 1, duration: .4, ease: "back.out(3)"}, t);
     if (tk) loop.fromTo(tk, {drawSVG: "0%"}, {drawSVG: "100%", duration: .3, ease: "none"}, t + .15);
@@ -482,8 +491,9 @@ JS = """MAFig.register("gaps", function (root, variant) {
       loop.to(o, {y: odoTop(o) + (k + 1) * o.getAttribute("data-pitch"), duration: .35, ease: "power2.out"}, t + .1);
     });
   });
-  loop.to(scan, {opacity: 0, duration: .3}, A0 + 4.7)
-    .fromTo(bubble, {opacity: 0, scale: .92}, {opacity: 1, scale: 1, transformOrigin: "50% 0%", duration: .45, ease: "back.out(2)"}, A0 + 4.7);
+  loop.to(scan, {opacity: 0, duration: .3}, __A0__ + 4.7)
+    .fromTo(bubble, {opacity: 0, scale: .92}, {opacity: 1, scale: 1, transformOrigin: "50% 0%", duration: .45, ease: "back.out(2)"}, __A0__ + 4.7)
+    .fromTo(bnote, {opacity: 0}, {opacity: 1, duration: .3}, __A0__ + 4.9);
   q(".f-gaps-flow").forEach(function (el) {
     var t = +el.getAttribute("data-t");
     loop.fromTo(el, {drawSVG: "0% 14%", opacity: 1}, {drawSVG: "86% 100%", opacity: 1, duration: .6, ease: "power1.in"}, t)
@@ -501,10 +511,10 @@ JS = """MAFig.register("gaps", function (root, variant) {
   loop.fromTo(q(".f-gaps-skip"), {opacity: .3}, {opacity: 1, duration: .5}, 4.8)
     .set({}, {}, __TL__);
   return {intro: intro, loop: loop};
-});""".replace("__TL__", str(T_LOOP)).replace("A0", str(A0))
+});""".replace("__TL__", str(T_LOOP)).replace("__A0__", str(A0))
 
 # panel b replays before A0, panel a ends inside the loop period (bubble A0 + 4.7 + .45)
-assert 2.2 + (len([p for p in PAIRS if p[3] is not None]) - 1) * .6 + 1.1 <= A0 and A0 + 4.7 + .45 <= T_LOOP
+assert 2.2 + (len([p for p in PAIRS if p[3] is not None]) - 1) * .6 + 1.1 <= A0 and A0 + 4.9 + .3 <= T_LOOP
 
 
 def build():

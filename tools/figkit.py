@@ -93,6 +93,8 @@ _SWATCH = {
     "dash": lambda x: f'<path d="M{x},-4 h22" class="lg-dash"/>',
     "hex": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hex"/>',
     "hexdash": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hexdash"/>',
+    "tick": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-box"/><path d="M{x + 6.5},-4.5 l3.5,3.5 l6,-7" class="lg-tick"/>',
+    "cell": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-cell"/>',
 }
 
 
@@ -103,6 +105,11 @@ def legend(items, x, y):
         out.append(_SWATCH[kind](cx) + f'<text x="{cx + 30}" y="0">{escape(text)}</text>')
         cx += 30 + int(len(text) * 8.1) + 22
     return f'<g class="legend" transform="translate({f(x)},{f(y)})">{"".join(out)}</g>'
+
+
+def note(x, y, text="values are illustrative"):
+    """A legend-row note with no swatch."""
+    return f'<g class="legend" transform="translate({f(x)},{f(y)})"><text x="0" y="0">{escape(text)}</text></g>'
 
 
 def svg(w, h, body, variant, label):

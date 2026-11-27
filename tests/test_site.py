@@ -410,7 +410,7 @@ class SiteTests(unittest.TestCase):
     def test_sublabel_length(self):
         import html
         for svg in re.findall(r"<svg\b[^>]*class=\"sch [^\"]*\".*?</svg>", PAGE, flags=re.S):
-            for t in re.findall(r'<text class="sub"[^>]*>(.*?)</text>', svg, flags=re.S):
+            for t in re.findall(r'<text class="sub[ "][^>]*>(.*?)</text>', svg, flags=re.S):  # multi-class subs too
                 self.assertLessEqual(len(html.unescape(re.sub(r"<[^>]+>", "", t))), 22, t)
 
     def test_reveal_viewport_based(self):
@@ -608,7 +608,12 @@ class SiteTests(unittest.TestCase):
                 self.assertIn(part, body, (v, part))
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
-            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+            self.assertNotRegex(body, r"<animate|[Vv]alidat|temperature 0")
+            shown = " ".join(re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S))
+            self.assertIn("not checked", shown, v)  # the quote is not checked against the abstract (C07)
+            self.assertIn("against the abstract", shown, v)
+            self.assertIn("not compared", shown, v)  # pairs whose units differ (C10)
+        self.assertNotIn("temperature 0", sec)  # a primed tier route sets the judge's temperature (C07)
         cards = re.findall(r'<article class="card"[^>]*>', sec)
         self.assertEqual(len(cards), 3)  # gaps by rules, closure judged against papers, where sources disagree
         for card in cards:

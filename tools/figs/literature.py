@@ -5,7 +5,7 @@ knowledge graph; the evidence docks in the language model (the one dark panel), 
 loop replays the reading: beam, bars, lens, graph path, answer."""
 from html import escape
 
-from figkit import Figure, curve_d, f, hdr, icon, legend, svg
+from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
 T_LOOP = 10.4
 LENS_S = 1.8  # lens magnification
@@ -35,13 +35,8 @@ LABEL = ("Reading the literature: LR 1.1 turns a question into up to five querie
          "network follows a multi-hop path across the graph. A language model writes the answer from this evidence, "
          "citing pages as [p. N]. Scores and the example are illustrative.")
 LEGEND = [("flow", "evidence to the answer"), ("dash", "optional · fallback"), ("amber", "skipped: over 2 per page")]
-NOTE = "values are illustrative"
 LATE = ("chunks", "reading", "graph", "answer")  # connectors into the panel and the answer
 EVIDENCE = ("chunks", "reading", "answer")  # solid teal in the static frame (legend: evidence to the answer)
-
-
-def _note(x, y):
-    return f'<g class="legend" transform="translate({f(x)},{f(y)})"><text x="0" y="0">{NOTE}</text></g>'
 
 
 def _flow(d, key, dashed=False, arrow=True):
@@ -310,7 +305,7 @@ def _wide():
     # the answer
     P.append(_flow(f"M966,{py} V{py - 22}", "answer"))
     P.append(_answer(pre, 862, 56, 208, 142, "wide", 966, tail_up=False))
-    P.append(legend(LEGEND, 30, H - 18) + _note(740, H - 18))
+    P.append(legend(LEGEND, 30, H - 18) + note(740, H - 18))
     return svg(W, H, "".join(P), "wide", LABEL)
 
 
@@ -383,7 +378,7 @@ def _narrow():
     P.append(_flow(f"M180,{py + 238} V{ay - 16}", "answer"))
     P.append(_answer(pre, 16, ay, 328, 112, "narrow", 180, tail_up=True))
     H = ay + 112 + 128  # four legend rows below the answer
-    P.append("".join(legend([it], 16, H - 84 + 24 * k) for k, it in enumerate(LEGEND)) + _note(16, H - 12))
+    P.append("".join(legend([it], 16, H - 84 + 24 * k) for k, it in enumerate(LEGEND)) + note(16, H - 12))
     return svg(W, H, "".join(P), "narrow", LABEL)
 
 
