@@ -1,10 +1,10 @@
 """Interfaces figure: the database as a radial hub (claims C33-C36, C50, C73-C75).
 Six sources sit on an outer orbit; each sends records inward along curved orbital lanes through concentric shells:
-the mapping ring (a fixed template for a known source-database pair, a language model for uploads and any other pair,
+the mapping ring, one gate centred on each source (a fixed template for a known source-database pair, a language model for uploads and any other pair,
 KC extraction for records from papers), the review shell (a person reviews the column mapping of a Data Agent import;
 KC records skip it), the check shell, and the dark database core, where each record docks into a slot. Chat and the MCP
-server are two ports under the hub: chat starts the upload, an MCP agent's import waits until a person confirms it, and
-at the end both ports read from the database. A record docks only after it is mapped, reviewed and checked; the order
+server are two ports under the hub: an import started from either waits until a person confirms it (chat's upload,
+an MCP agent's Open Catalyst import), and at the end both ports read from the database. A record docks only after it is mapped, reviewed and checked; the order
 is fixed in data-e/data-t here and asserted at build time and in the tests. Two records per source; values are
 illustrative."""
 import math
@@ -20,24 +20,26 @@ SRC = [("Uploads", "CSV, JSON, Excel", "language model", "upload", "lm", 135),
        ("Papers", "KC 6.1–6.4", "records extracted", "augment", "kc", 315),
        ("Open Catalyst", "download or local", "template → CatPlat", "dm-catalyst", "tpl", 0)]
 I_CHAT, I_MCP = 0, 5  # chat starts the upload; an MCP agent starts the Open Catalyst import
-SWEEP = (45, 60)  # each source's two lanes turn this far (degrees) from the orbit to their slots
+# Each source's two lanes fan out almost radially to its own gate (offsets O at the ring, centred on the source), then
+# turn inside the ring to their slots (E): every gate, review mark and check tick sits by the source it belongs to.
+O_GATE, E_SLOT = (-4, 4), (0, 15)
 NSLOT = 24  # slots every 15 degrees, so every lane ends on one
 for _s in SRC:
     assert len(_s[1]) <= 22 and len(_s[2]) <= 22 and _s[5] % 45 == 0, _s
-assert all((a + s) % (360 // NSLOT) == 0 for *_, a in SRC for s in SWEEP)
+assert all((a + e) % (360 // NSLOT) == 0 for *_, a in SRC for e in E_SLOT) and max(E_SLOT) - min(O_GATE) < 45 / 2
 
 CW = {"wide": 7.68, "narrow": 8.04}  # Geist Mono advance per character at the sub size
 HW = {"wide": 9.73, "narrow": 10.18}  # header advance (0.6 em + .16 em letter-spacing)
-TTL_EM = 0.58  # conservative Geist 600 advance per em
 
 # radii: orbit, mapping ring (inner, outer), review shell, check shell, core, slot ring; planet and slot radius
 G = {"wide": dict(W=1100, cx=550, cy=395, orb=262, m0=162, m1=186, rev=142, chk=122, core=100, slot=86, pr=21, sr=4.5),
-     "narrow": dict(W=360, cx=180, cy=528, orb=162, m0=118, m1=136, rev=106, chk=85, core=72, slot=62, pr=16, sr=3.8)}
+     "narrow": dict(W=360, cx=180, cy=632, orb=162, m0=118, m1=136, rev=106, chk=85, core=72, slot=62, pr=16, sr=3.8)}
 
 # --- timing (s) within one pass -----------------------------------------------------------------------------------
-T_CHAT = (0.0, .6)  # chat port pulses; its packet carries the file to the uploads source
-T_MCP, T_CWAIT, T_CONF = (2.3, 2.9), (2.9, 3.5), 3.5  # an MCP agent asks to import; it waits for a person to confirm
-L = [.6, 1.05, 1.5, 1.95, 2.4, 3.7]  # each source lights and launches its two records
+# a port pulses (asked to import), its chip waits for a person, the tick shows, then the request reaches the source
+T_CHAT, T_CCWAIT, T_CCONF = (0.0, .5), (.5, 1.1), 1.1
+T_MCP, T_CWAIT, T_CONF = (2.3, 2.9), (2.9, 3.5), 3.5
+L = [1.6, .4, .9, 2.1, 2.6, 3.7]  # each source lights and launches its two records
 TO_GATE, TO_REV, REV_D, DOCK_D = .8, .25, .65, .5
 T0_INTRO, HOLD, T0_LOOP = 1.4, 1.2, 1.8
 
@@ -104,11 +106,19 @@ def _band(g, r0, r1, a0, a1):
             f"A{r0},{r0} 0 {big} 0 {f(x3)},{f(y3)} Z")
 
 
+def _ang(g, a, k, r):
+    """Angle of lane k of the source at a, at radius r: a slight fan to the gate, then a smooth turn to the slot."""
+    if r >= g["m1"]:
+        return a + O_GATE[k] * (g["orb"] - r) / (g["orb"] - g["m1"])
+    s = (g["m1"] - r) / (g["m1"] - g["slot"])
+    return a + O_GATE[k] + (E_SLOT[k] - O_GATE[k]) * s * s * (3 - 2 * s)
+
+
 def _lane(g, a, k):
-    """One orbital lane: a spiral from the source on the orbit to its slot, as Catmull-Rom cubics.
+    """One lane from the source on the orbit to its slot, as Catmull-Rom cubics.
     Returns the path data and a function giving the share of its length (%) at which it first reaches radius R."""
-    n, sw = 8, SWEEP[k]
-    P = [_pt(g, g["orb"] - u / n * (g["orb"] - g["slot"]), a + u / n * sw) for u in range(n + 1)]
+    n = 10
+    P = [_pt(g, r, _ang(g, a, k, r)) for r in (g["orb"] - u / n * (g["orb"] - g["slot"]) for u in range(n + 1))]
     E = [P[0]] + P + [P[-1]]
     segs = []
     for j in range(1, n + 1):
@@ -175,7 +185,7 @@ def _check_order(E, t_count, t_q):
         assert all(a < b for a, b in zip(seq, seq[1:])), (i, seq)
         if not kc:
             assert e["wait"][0] > e["map"] + .3 and e["wait"][1] <= e["rev"]  # pauses once mapped; passes when reviewed
-    assert T_CHAT[1] <= L[I_CHAT] and T_MCP[0] < T_CWAIT[0] < T_CONF < L[I_MCP]
+    assert T_CHAT[0] < T_CCWAIT[0] < T_CCONF < L[I_CHAT] and T_MCP[0] < T_CWAIT[0] < T_CONF < L[I_MCP]
     assert max(max(e["dock"]) for e in E) < t_count < t_q
 
 
@@ -196,7 +206,6 @@ def _hub(g, v, pre, lanes, E):
     cx, cy, P = g["cx"], g["cy"], []
     gc, gr, gm = _gaps(g, v)
     mid = (g["m0"] + g["m1"]) / 2
-    u = lambda R: (g["orb"] - R) / (g["orb"] - g["slot"])  # lane progress at radius R
     P.append(f'<circle class="f-interfaces-orbit" cx="{cx}" cy="{cy}" r="{g["orb"]}" pathLength="360" data-o="{cx} {cy}"/>')
     # lanes (static, faint) under everything else
     P.append('<g class="f-interfaces-lanes">' + "".join(f'<path d="{x["d"]}"/>' for ln in lanes for x in ln) + "</g>")
@@ -204,7 +213,7 @@ def _hub(g, v, pre, lanes, E):
     P.append(f'<path class="f-interfaces-ring" d="{_band(g, g["m0"], g["m1"], 90 + gm, 450 - gm)}"/>')
     for i, s in enumerate(SRC):
         a, kind = s[5], s[4]
-        a0, a1 = a + u(mid) * SWEEP[0] - 6, a + u(mid) * SWEEP[1] + 6
+        a0, a1 = _ang(g, a, 0, mid) - 6, _ang(g, a, 1, mid) + 6
         body = f'<path class="f-interfaces-gb" d="{_band(g, g["m0"], g["m1"], a0, a1)}"/>'
         if kind == "tpl":  # a fixed comb: column to column
             body += '<path class="f-interfaces-comb" d="' + " ".join(
@@ -217,11 +226,11 @@ def _hub(g, v, pre, lanes, E):
         else:  # KC: records lifted out of the text
             body += f'<path class="f-interfaces-kcl" d="{_arc(g, g["m0"] + 7, a0 + 2, a1 - 2)} {_arc(g, g["m1"] - 7, a0 + 2, a1 - 2)}"/>'
         ev, t = ("xtr" if kind == "kc" else "map"), E[i]["map"]
-        P.append(f'<g class="f-interfaces-gate {kind}">{body}</g>'
+        P.append(f'<g class="f-interfaces-gate {kind}" data-a="{a}" data-ga="{(a0 + a1) / 2:.1f}">{body}</g>'
                  f'<path class="f-interfaces-glit" d="{_band(g, g["m0"], g["m1"], a0, a1)}" {_at(ev, t, i)}/>')
     # review shell: amber, dashed; no arc where KC records pass (they have no mapping to review)
     kc = next(s[5] for s in SRC if s[4] == "kc")
-    k0, k1 = kc + u(g["rev"]) * SWEEP[0] - 8, kc + u(g["rev"]) * SWEEP[1] + 8
+    k0, k1 = _ang(g, kc, 0, g["rev"]) - 8, _ang(g, kc, 1, g["rev"]) + 8
     P.append(f'<path class="f-interfaces-rev" d="{_arc(g, g["rev"], 90 + gr, k0)} {_arc(g, g["rev"], k1, 450 - gr)}"/>')
     P.append(f'<path class="f-interfaces-chk" d="{_arc(g, g["chk"], 90 + gc, 450 - gc)}"/>')
     # core: the one dark panel, with the slot ring
@@ -232,15 +241,15 @@ def _hub(g, v, pre, lanes, E):
     for i, s in enumerate(SRC):
         a, e = s[5], E[i]
         if s[4] != "kc":
-            r0, r1 = a + u(g["rev"]) * SWEEP[0] - 4, a + u(g["rev"]) * SWEEP[1] + 4
-            P.append(f'<path class="f-interfaces-wait" d="{_arc(g, g["rev"], r0, r1)}" '
-                     f'{_at("wait", e["wait"][0], i, "data-w=" + chr(34) + _tv(e["wait"][0]) + " " + _tv(e["wait"][1]) + chr(34))} opacity="0"/>'
+            r0, r1 = _ang(g, a, 0, g["rev"]) - 4, _ang(g, a, 1, g["rev"]) + 4
+            w = f'data-w="{_tv(e["wait"][0])} {_tv(e["wait"][1])}"'
+            P.append(f'<path class="f-interfaces-wait" d="{_arc(g, g["rev"], r0, r1)}" {_at("wait", e["wait"][0], i, w)} opacity="0"/>'
                      f'<path class="f-interfaces-ok" d="{_arc(g, g["rev"], r0, r1)}" {_at("rev", e["rev"], i)}/>')
-        bx, by = _pt(g, g["chk"], a + u(g["chk"]) * sum(SWEEP) / 2)
+        bx, by = _pt(g, g["chk"], (_ang(g, a, 0, g["chk"]) + _ang(g, a, 1, g["chk"])) / 2)
         P.append(f'<g class="f-interfaces-ck" {_at("chk", e["chk"], i)}><circle cx="{f(bx)}" cy="{f(by)}" r="7"/>'
                  f'<path d="M{f(bx - 3.2)},{f(by + .2)} l2.2,2.3 l4.2,-4.8"/></g>')
         for k in range(2):
-            x, y = _pt(g, g["slot"], a + SWEEP[k])
+            x, y = _pt(g, g["slot"], a + E_SLOT[k])
             P.append(f'<circle class="f-interfaces-fill" cx="{f(x)}" cy="{f(y)}" r="{g["sr"] + .6}" {_at("dock", e["dock"][k], i)}/>')
     # records in flight
     for i, ln in enumerate(lanes):
@@ -266,7 +275,6 @@ def _planet(g, i, v, labelled):
          f'<use class="ic" href="#i-{ic}" x="{f(x - isz / 2)}" y="{f(y - isz / 2)}" width="{isz}" height="{isz}"/>'
          f'<circle class="f-interfaces-lit" cx="{f(x)}" cy="{f(y)}" r="{pr + 4.5}" {_at("lit", L[i], i)}/>']
     if labelled:
-        hw = len(title) * 14.5 * TTL_EM
         if a == 270:  # above the planet
             ys, anchor, lx = (y - pr - 50, y - pr - 31, y - pr - 13), "middle", x
         else:
@@ -277,7 +285,6 @@ def _planet(g, i, v, labelled):
         P.append(f'<text class="ttl" x="{f(lx)}" y="{f(ys[0])}"{a_}>{escape(title)}</text>'
                  f'<text class="sub" x="{f(lx)}" y="{f(ys[1])}"{a_}>{escape(det)}</text>'
                  f'<text class="sub f-interfaces-how {kind}" x="{f(lx)}" y="{f(ys[2])}"{a_}>{escape(how)}</text>')
-        assert hw < 160
     return "".join(P) + "</g>"
 
 
@@ -289,16 +296,19 @@ def _port(x, y, w, h, ic, title, subs, ev, extra=""):
             f'<rect class="f-interfaces-glow" x="{f(x - 3)}" y="{f(y - 3)}" width="{w + 6}" height="{h + 6}" rx="12" {ev}{extra} opacity="0"/>')
 
 
-def _chip(x, y, v, t_wait, t_conf):
-    """MCP writes wait for a person: the chip's amber ring shows the wait, a tick its confirmation."""
+def _chip(x, y, v, t_wait, t_conf, src):
+    """Imports write data, so they wait for a person: the chip's amber ring shows the wait, a tick its confirmation;
+    src is the source the confirmed request starts."""
     txt = "a person confirms"
     w = 30 + len(txt) * CW[v] + 12
+    wait = _at("cwait", t_wait[0], None, f'data-s="{src}" data-w="{_tv(t_wait[0])} {_tv(t_wait[1])}"')
+    conf = _at("conf", t_conf, None, f'data-s="{src}"')
     return (f'<g class="f-interfaces-chip"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="26" rx="13"/>'
             f'<text class="sub" x="{f(x + 30)}" y="{f(y + 17.5)}">{txt}</text></g>'
             f'<rect class="f-interfaces-cw" x="{f(x - 3)}" y="{f(y - 3)}" width="{f(w + 6)}" height="32" rx="16" '
-            f'{_at("cwait", t_wait[0], None, "data-w=" + chr(34) + _tv(t_wait[0]) + " " + _tv(t_wait[1]) + chr(34))} opacity="0"/>'
+            f'{wait} opacity="0"/>'
             f'<circle class="f-interfaces-cdot" cx="{f(x + 14)}" cy="{f(y + 13)}" r="5"/>'
-            f'<g class="f-interfaces-ck" {_at("conf", t_conf, None, "data-s=" + chr(34) + str(I_MCP) + chr(34))}>'
+            f'<g class="f-interfaces-ck" {conf}>'
             f'<circle cx="{f(x + 14)}" cy="{f(y + 13)}" r="7"/><path d="M{f(x + 10.8)},{f(y + 13.2)} l2.2,2.3 l4.2,-4.8"/></g>')
 
 
@@ -315,18 +325,32 @@ LABEL = ("MatAgent's database drawn as a hub. Six sources sit on an orbit: Mater
          "known source–database pair (Materials Project and Open Catalyst into CatPlat, MPEA into the metal domain, "
          "PolyMetriX into the polymer domain), a language model for uploads and any other pair, and extraction for "
          "papers. Each Data Agent import then pauses until a person reviews its column mapping; KC records are staged "
-         "instead. Records pass type and reference checks, and only then dock in the CatPlat or MatPlat database. Two "
+         "instead. Records are checked (required fields, ranges), and only then dock in the CatPlat or MatPlat database. Two "
          "ports sit under the hub: chat, which starts imports and takes uploads up to 50 MiB, and answers in typed blocks "
          "with 3D structures; and the MCP server, with ten tools over stdio or SSE on localhost and per-agent tokens. An "
-         "MCP agent's import writes data, so a person confirms it first unless that agent is trusted for writes; both "
+         "import writes data, so a person confirms it first: in chat, and for an MCP agent unless it is trusted for "
+         "writes. Both "
          "ports then query the database. Two records per source; values are illustrative.")
+
+
+def _glyph(x, y, w, h, kind):
+    """A mapping-gate swatch: comb (template), scattered dots (language model) or stripes (KC extraction)."""
+    sw = f'<rect class="f-interfaces-gb" x="{f(x)}" y="{f(y)}" width="{w}" height="{h}" rx="3"/>'
+    if kind == "tpl":
+        sw += '<path class="f-interfaces-comb" d="' + " ".join(f"M{f(x + w * (q + 1) / 6)},{f(y + 3)} V{f(y + h - 3)}" for q in range(5)) + '"/>'
+    elif kind == "lm":
+        sw += "".join(f'<circle class="f-interfaces-lmd" cx="{f(x + w * px)}" cy="{f(y + h * py)}" r="2"/>'
+                      for px, py in ((.23, .25), (.47, .7), (.7, .35), (.83, .75)))
+    else:
+        sw += f'<path class="f-interfaces-kcl" d="M{f(x + 4)},{f(y + h * .3)} H{f(x + w - 4)} M{f(x + 4)},{f(y + h * .7)} H{f(x + w - 4)}"/>'
+    return f'<g class="f-interfaces-gate {kind}">{sw}</g>'
 
 
 def _keys(v):
     """Wide only: the path a record takes (top left) and the three kinds of mapping gate (top right)."""
     P = [hdr(30, 30, "RECORD PATH, INWARD")]
     for j, (tag, sub, cls) in enumerate((("01 MAP", "columns to the schema", ""), ("02 REVIEW", "a person, per import", " f-interfaces-amb"),
-                                         ("03 CHECK", "types and references", ""), ("04 DOCK", "records written", ""))):
+                                         ("03 CHECK", "fields and ranges", ""), ("04 DOCK", "records written", ""))):
         y = 58 + 23 * j
         P.append(f'<text class="hdr{cls}" x="30" y="{y}">{tag}</text><text class="sub" x="128" y="{y}">{sub}</text>')
     x0 = 846
@@ -334,14 +358,7 @@ def _keys(v):
     for j, (kind, ttl, sub) in enumerate((("tpl", "Fixed template", "known source–DB pair"), ("lm", "Language model", "uploads, other pairs"),
                                           ("kc", "KC extraction", "records from papers"))):
         y = 46 + 42 * j
-        sw = f'<rect class="f-interfaces-gb" x="{x0}" y="{y + 4}" width="30" height="20" rx="3"/>'
-        if kind == "tpl":
-            sw += '<path class="f-interfaces-comb" d="' + " ".join(f"M{x0 + 5 + 5 * q},{y + 7} V{y + 21}" for q in range(5)) + '"/>'
-        elif kind == "lm":
-            sw += "".join(f'<circle class="f-interfaces-lmd" cx="{x0 + cx_}" cy="{y + cy_}" r="2"/>' for cx_, cy_ in ((7, 9), (14, 18), (21, 11), (25, 19)))
-        else:
-            sw += f'<path class="f-interfaces-kcl" d="M{x0 + 4},{y + 10} H{x0 + 26} M{x0 + 4},{y + 18} H{x0 + 26}"/>'
-        P.append(f'<g class="f-interfaces-gate {kind}">{sw}</g><text class="ttl sm" x="{x0 + 42}" y="{y + 12}">{ttl}</text>'
+        P.append(_glyph(x0, y + 4, 30, 20, kind) + f'<text class="ttl sm" x="{x0 + 42}" y="{y + 12}">{ttl}</text>'
                  f'<text class="sub" x="{x0 + 42}" y="{y + 31}">{sub}</text>')
     return "".join(P)
 
@@ -371,15 +388,16 @@ def _ports(g, v, t_q):
         ca, ma = 112, 68
         con_c = vcurve_d(350, cy0, ux, uy + pr + 2)
         con_m = vcurve_d(780, cy0, ox, oy + pr + 2)
-        chip = (800, 588)
+        chips = ((170, 620), (800, 620), (806, 663, "start"))
     else:
-        cy0, w, h = 714, 160, 92
+        cy0, w, h = 818, 160, 92
         chat, mcp = (12, cy0), (188, cy0)
         subs_m = ("ten tools", "stdio · local SSE", "per-agent tokens")
         ca, ma = 115, 65
         con_c = vcurve_d(ux, cy0, ux, uy + pr + 2)
         con_m = vcurve_d(ox - 8, cy0, ox, oy + pr + 2)
-        chip = (188, cy0 + h + 12)
+        cw_ = 30 + 17 * CW[v] + 12
+        chips = ((12, cy0 + h + 12), (348 - cw_, cy0 + h + 48), (348, cy0 + h + 48 + 44, "end"))
     t0, t1 = T_CHAT
     qa = f"{_tv(t_q + .5)} {_tv(t_q + 1.1)}"
     P = []
@@ -388,13 +406,15 @@ def _ports(g, v, t_q):
         sx, sy = _pt(g, g["core"], a)
         d = vcurve_d(sx, sy, px + w / 2, py)
         P.append(f'<path class="f-interfaces-cond" d="{d}"/>' + _pk(d, t_q, .5, _at("query", t_q)))
-    P.append(f'<path class="cv f-interfaces-con" d="{con_c}" marker-end="url(#arr)"/>' + _pk(con_c, t0 + .05, .45, ""))
+    P.append(f'<path class="cv f-interfaces-con" d="{con_c}" marker-end="url(#arr)"/>' + _pk(con_c, T_CCONF + .05, .4, ""))
     P.append(f'<path class="cv f-interfaces-con" d="{con_m}" marker-end="url(#arr)"/>' + _pk(con_m, T_MCP[0] + .05, .5, ""))
     P.append(_port(*chat, w, h, "chat", "Chat", ("uploads ≤ 50 MiB", "typed blocks · 3D", "starts imports"),
-                   _at("chat", t0, None, f'data-s="{I_CHAT}" data-w="{_tv(t0)} {_tv(t1)} {qa}"')))
+                   _at("chat", t0, None, f'data-w="{_tv(t0)} {_tv(t1)} {qa}"')))
     P.append(_port(*mcp, w, h, "plug", "MCP server", subs_m,
                    _at("mcp", T_MCP[0], None, f'data-w="{_tv(T_MCP[0])} {_tv(T_MCP[1])} {qa}"')))
-    P.append(_chip(*chip, v, T_CWAIT, T_CONF))
+    lx, ly, anchor = chips[2]
+    P.append(_chip(*chips[0], v, T_CCWAIT, T_CCONF, I_CHAT) + _chip(*chips[1], v, T_CWAIT, T_CONF, I_MCP)
+             + f'<text class="lbl" x="{f(lx)}" y="{f(ly)}" text-anchor="{anchor}">unless trusted for writes</text>')
     return "".join(P)
 
 
@@ -413,18 +433,17 @@ def _narrow(lanes, E, t_count, t_q):
     g, v, pre = G["narrow"], "narrow", "if-n"
     P = [_defs(pre), hdr(12, 24, "SOURCES")]
     for i, (title, det, how, ic, kind, _a) in enumerate(SRC):
-        y0 = 40 + 48 * i
-        tw = len(title) * 13.5 * .54  # Geist 600 at 13.5: ~.52 em average; the sweep checks the gap
-        assert 50 + tw + 10 + len(det) * CW[v] <= 348, title
+        y0 = 40 + 66 * i  # title, detail, then the mapping keyed by its gate glyph
         P.append(f'<circle class="f-interfaces-pl" cx="26" cy="{y0 + 15}" r="13"/>'
                  f'<use class="ic" href="#i-{ic}" x="19" y="{y0 + 8}" width="14" height="14"/>'
                  f'<text class="ttl sm" x="50" y="{y0 + 10}">{escape(title)}</text>'
-                 f'<text class="sub" x="{f(50 + tw + 10)}" y="{y0 + 10}">{escape(det)}</text>'
-                 f'<text class="sub f-interfaces-how {kind}" x="50" y="{y0 + 29}">{escape(how)}</text>')
+                 f'<text class="sub" x="50" y="{y0 + 31}">{escape(det)}</text>'
+                 + _glyph(50, y0 + 39, 26, 16, kind)
+                 + f'<text class="sub f-interfaces-how {kind}" x="86" y="{y0 + 51}">{escape(how)}</text>')
     P += [_hub(g, v, pre, lanes, E), _inline(g, v), _core_text(g, v, t_count)]
     P += [_planet(g, i, v, False) for i in range(len(SRC))]
     P.append(_ports(g, v, t_q))
-    ly = 714 + 92 + 12 + 26 + 36
+    ly = 818 + 92 + 48 + 44 + 40
     P.append("".join(legend([it], 12, ly + 26 * k) for k, it in enumerate(LEGEND)) + note(12, ly + 26 * len(LEGEND)))
     return svg(g["W"], ly + 26 * len(LEGEND) + 14, "".join(P), v, LABEL)
 
@@ -457,13 +476,14 @@ JS = """MAFig.register("interfaces", function (root, variant) {
   intro.from(q(".hdr, .legend"), {opacity: 0, duration: .5}, 0)
     .from(q(".f-interfaces-core"), {opacity: 0, scale: .85, transformOrigin: "50% 50%", duration: .6}, 0)
     .from(q(".f-interfaces-slots circle"), {opacity: 0, duration: .2, stagger: .015}, .2)
-    .from(q(".f-interfaces-chk, .f-interfaces-rev"), {drawSVG: "50% 50%", duration: .6, stagger: .12}, .25)
-    .from(q(".f-interfaces-ring"), {opacity: 0, duration: .5}, .45)
+    .from(q(".f-interfaces-chk"), {drawSVG: "50% 50%", duration: .6}, .25)
+    // dashed shapes fade in: drawSVG would replace their dash pattern
+    .from(q(".f-interfaces-rev, .f-interfaces-ring"), {opacity: 0, duration: .5}, .4)
     .from(q(".f-interfaces-gate"), {opacity: 0, duration: .35, stagger: .05}, .5)
     .from(orbit, {opacity: 0, duration: .8}, .4)
     .from(q(".f-interfaces-src"), {opacity: 0, duration: .4, stagger: .07}, .6)
     .from(q(".f-interfaces-lanes, .sub:not([data-t]), .ttl, .f-interfaces-pl, .ic"), {opacity: 0, duration: .5}, .7)
-    .from(q(".f-interfaces-port, .f-interfaces-chip, .f-interfaces-cond, .f-interfaces-con, .f-interfaces-cdot"), {opacity: 0, y: 8, duration: .5, stagger: .05}, .8)
+    .from(q(".f-interfaces-port, .f-interfaces-chip, .f-interfaces-cond, .f-interfaces-con, .f-interfaces-cdot, .lbl"), {opacity: 0, y: 8, duration: .5, stagger: .05}, .8)
     .set(shown, {opacity: 0}, 0);
   pass(intro, __T0I__);
   // loop: the orbit drifts (whole dash periods, so the wrap is seamless); hold the finished frame, clear what the pass

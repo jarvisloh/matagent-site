@@ -1071,9 +1071,10 @@ class SiteTests(unittest.TestCase):
             label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
             self.assertGreaterEqual(len(label), 20)
             for word in ("Materials Project", "MPEA", "PolyMetriX", "Open Catalyst", "download", "upload", "template",
-                         "language model", "review", "checks", "KC", "chat", "MCP", "ten tools", "person confirms",
-                         "illustrative"):
+                         "language model", "review", "checked (required fields, ranges)", "KC", "chat", "MCP", "ten tools",
+                         "person confirms", "unless it is trusted", "illustrative"):
                 self.assertIn(word, label, (v, word))
+            self.assertNotIn("reference", label, v)  # not every import gets a reference check
             body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
             shown = html.unescape(" ".join(re.sub(r"<[^>]+>", "", t) for t in re.findall(r"<text[^>]*>(.*?)</text>", body)))
             self.assertIn('class="legend"', body, v)
@@ -1081,13 +1082,17 @@ class SiteTests(unittest.TestCase):
             self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the database core
             for want in ("Materials Project", "MPEA", "PolyMetriX", "Open Catalyst", "Uploads", "Papers", "template",
                          "language model", "DATABASE", "CatPlat", "MatPlat", "Chat", "MCP", "ten tools", "MAP",
-                         "REVIEW", "CHECK", "a person confirms", "50 MiB"):
+                         "REVIEW", "CHECK", "a person confirms", "unless trusted for writes", "50 MiB"):
                 self.assertIn(want, shown, (v, want))
             # six sources on the orbit, two records each; every record docks into its own slot
             self.assertEqual(len(re.findall(r'<g class="f-interfaces-src"', body)), 6, v)
             self.assertEqual(len(re.findall(r'class="f-interfaces-pk"', body)), 12, v)
             self.assertEqual(body.count('data-e="dock"'), 12, v)
             self.assertEqual(len(set(re.findall(r'class="f-interfaces-gate (tpl|lm|kc)"', body))), 3, v)  # three mapping kinds
+            # every gate sits by its own source (pairing is unambiguous): its centre is within 10 degrees of the source
+            for a_src, a_gate in re.findall(r'data-a="(\d+)" data-ga="(-?[\d.]+)"', body):
+                self.assertLessEqual(abs((float(a_gate) - float(a_src) + 180) % 360 - 180), 10, (v, a_src, a_gate))
+            self.assertEqual(len(re.findall(r'data-ga="', body)), 6, v)
             # causality: per source, a record is mapped, reviewed (not KC), checked, then docked
             ev = {}
             for e, t, i in re.findall(r'data-e="(\w+)" data-t="([\d.]+)"(?: data-i="(\d)")?', body):
@@ -1099,10 +1104,15 @@ class SiteTests(unittest.TestCase):
                 steps = ["lit", "xtr" if i in kc else "map"] + ([] if i in kc else ["wait", "rev"]) + ["chk", "dock"]
                 for a, b in zip(steps, steps[1:]):
                     self.assertLess(last(a, i), first(b, i), (v, i, a, b))
-            self.assertLess(last("chat"), first("lit", re.search(r'data-e="chat"[^>]*data-s="(\d)"', body).group(1)), v)
-            self.assertLess(last("mcp"), first("cwait"), v)
-            self.assertLess(last("cwait"), first("conf"), v)
-            self.assertLess(last("conf"), first("lit", re.search(r'data-e="conf"[^>]*data-s="(\d)"', body).group(1)), v)
+            # each import a port starts waits for a person: port pulse < chip wait < confirmation < the source launches
+            waits = dict((src, float(t)) for t, src in re.findall(r'data-e="cwait" data-t="([\d.]+)" data-s="(\d)"', body))
+            confs = dict((src, float(t)) for t, src in re.findall(r'data-e="conf" data-t="([\d.]+)" data-s="(\d)"', body))
+            self.assertEqual(sorted(waits), sorted(confs), v)
+            self.assertEqual(len(confs), 2, v)  # chat and MCP
+            for src, port in zip(sorted(confs), ("chat", "mcp")):
+                self.assertLess(last(port), waits[src], (v, port))
+                self.assertLess(waits[src], confs[src], (v, src))
+                self.assertLess(confs[src], first("lit", src), (v, src))
             self.assertLess(max(t for (e, i), ts in ev.items() if e == "dock" for t in ts), first("count"), v)
             self.assertLess(last("count"), first("query"), v)
             for cls in re.findall(r'class="([^"]*)"', body):
@@ -1110,6 +1120,8 @@ class SiteTests(unittest.TestCase):
             self.assertNotIn("<animate", body)
             self.assertNotIn("{", body)
         self.assertRegex(css(), r"\.f-interfaces-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        self.assertIn("imports are written after review and checks", sec)  # KC records are not reviewed
+        self.assertIn("merged if it passes", sec)
         allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
         for cid in ("C33", "C34", "C35", "C36", "C37", "C38", "C50", "C73", "C74", "C75"):
             self.assertIn(cid, allc)
