@@ -6,10 +6,10 @@ Usage: python3 tools/figures.py [--check]   (--check exits 1 if index.html would
 from __future__ import annotations
 
 import importlib
+import os
 import pkgutil
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -17,14 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figkit  # noqa: E402
 import figs  # noqa: E402
 
-INDEX = Path(__file__).resolve().parent.parent / "index.html"
-
-
-@dataclass
-class Figure:
-    wide: str
-    narrow: str
-    js: str
+INDEX = Path(os.environ.get("FIGURES_INDEX") or Path(__file__).resolve().parent.parent / "index.html")
+Figure = figkit.Figure  # single definition lives in figkit so figs/<id>.py never import this (possibly __main__) module
 
 
 FIGURES: dict[str, Callable[[], Figure]] = {

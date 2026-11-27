@@ -1,6 +1,15 @@
 """Shared SVG helpers for the figure generator; classes match the CSS family in index.html."""
 import math
+from dataclasses import dataclass
 from html import escape
+
+
+@dataclass
+class Figure:
+    """One figure: wide and narrow <svg> markup plus its MAFig.register(...) script."""
+    wide: str
+    narrow: str
+    js: str
 
 
 def f(x):
@@ -27,7 +36,7 @@ ICONS = {
 # Hidden shared defs: one <symbol id="i-<name>"> per icon (18x18), the hexagon (r = 10) and the tick, and the arrowhead.
 SYMBOLS = (
     "".join(f'<symbol id="i-{n}" viewBox="0 0 18 18" width="18" height="18" overflow="visible">{d}</symbol>' for n, d in ICONS.items())
-    + f'<symbol id="hex" viewBox="-10 -10 20 20" overflow="visible"><path d="{hexpath(0, 0, 10)}"/></symbol>'
+    + f'<symbol id="hex" viewBox="-10 -10 20 20" width="20" height="20" overflow="visible"><path d="{hexpath(0, 0, 10)}"/></symbol>'
     + '<symbol id="chk" viewBox="0 0 12 12" width="12" height="12" overflow="visible"><path d="M2.5 6.4 5 8.8 9.6 3.4"/></symbol>'
     + '<marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
     '<path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)"/></marker>'
@@ -38,6 +47,11 @@ def icon(name, x, y, cls="ic"):
     if name not in ICONS:
         raise KeyError(f"unknown icon {name!r}")
     return f'<use class="{cls}" href="#i-{name}" x="{f(x)}" y="{f(y)}"/>'
+
+
+def hexuse(cx, cy, r, cls="hx"):
+    """<use> of #hex centred on (cx, cy) with circumradius r; always emits explicit width/height (the symbol alone would fill the host SVG)."""
+    return f'<use class="{cls}" href="#hex" x="{f(cx - r)}" y="{f(cy - r)}" width="{f(2 * r)}" height="{f(2 * r)}"/>'
 
 
 def card(x, y, w, h, title, sub="", cls=""):

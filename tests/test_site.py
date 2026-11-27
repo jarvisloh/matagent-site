@@ -143,7 +143,7 @@ class SiteTests(unittest.TestCase):
 
     def test_svgs_accessible(self):
         for tag in re.findall(r"<svg\b[^>]*>", PAGE):
-            if 'aria-hidden="true"' in tag:  # the hidden shared-symbols sprite
+            if 'aria-hidden="true"' in tag and 'width="0"' in tag:  # the hidden shared-symbols sprite only
                 continue
             self.assertIn('role="img"', tag)
             m = re.search(r'aria-label="([^"]*)"', tag)
@@ -285,6 +285,22 @@ class SiteTests(unittest.TestCase):
     def test_generator_check_clean(self):
         r = subprocess.run([sys.executable, "tools/figures.py", "--check"], cwd=ROOT)
         self.assertEqual(r.returncode, 0)
+
+    def test_generator_check_detects_stale(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d) / "index.html"
+            tmp.write_text(PAGE.replace("<!-- symbols:start -->", "<!-- symbols:start --><symbol id=\"stale\"/>", 1), encoding="utf-8")
+            env = dict(os.environ, FIGURES_INDEX=str(tmp))
+            self.assertEqual(subprocess.run([sys.executable, "tools/figures.py", "--check"], cwd=ROOT, env=env).returncode, 1)
+            subprocess.run([sys.executable, "tools/figures.py"], cwd=ROOT, env=env, check=True)
+            self.assertEqual(tmp.read_text(encoding="utf-8"), PAGE)
+
+    def test_generator_idempotent(self):
+        before = (ROOT / "index.html").read_bytes()
+        for _ in range(2):
+            subprocess.run([sys.executable, "tools/figures.py"], cwd=ROOT, check=True)
+            self.assertEqual((ROOT / "index.html").read_bytes(), before)
 
     def test_runtime_guards_gsap(self):
         rt = self._script("figrt")
