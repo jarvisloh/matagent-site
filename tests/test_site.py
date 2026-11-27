@@ -824,10 +824,10 @@ class SiteTests(unittest.TestCase):
     # (code, what it measures, method chip, run token, run output); GCS, RCS, HFS confirmed (C44, C66); FS, ICS, ARS assumed (C45, C67)
     SCORES = [("GCS", "Gap closure", "language-model judge", "GAR 2.1", "gaps, papers read"),
               ("RCS", "RAG coverage", "term-count formula", "MMR 4.2 · 4.5 · 4.8", "analysis text"),
-              ("HFS", "Hypothesis formulation", "weighted sum of five", "HF 8.4", "hypothesis records"),
+              ("HFS", "Hypothesis formulation", "five weighted parts", "HF 8.4", "hypothesis records"),
               ("FS", "Plan feasibility", "resources and tools", "CDTP 3.3", "returned plan"),
               ("ICS", "Ingestion completeness", "ingested ÷ expected", "KC 6.2 · 6.4", "ingested items"),
-              ("ARS", "Tool readiness", "tests + security", "SE 7.2", "newly created tool")]
+              ("ARS", "Tool readiness", "if tests + security", "SE 7.2", "newly created tool")]
 
     def test_fig_scores(self):
         import html
@@ -864,9 +864,14 @@ class SiteTests(unittest.TestCase):
                     self.assertIn(want, shown, (v, code, want))
                 for part in ("f-scores-needle", "f-scores-val", "f-scores-lamp", "f-scores-read"):
                     self.assertIn(part, inner, (v, code, part))
+                # a method ring only where the code confirms the method (C44, C66): 6 gaps, 3 parts, 5 weights
+                segs = {"GCS": 6, "RCS": 3, "HFS": 5}.get(code, 0)
+                self.assertEqual(inner.count('class="f-scores-seg"'), segs, (v, code))
                 self.assertIn(code, re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
             runs = re.findall(r'<g class="f-scores-run" data-k="(\w+)"[^>]*>(.*?)</g>', body, flags=re.S)
             self.assertEqual([r[0] for r in runs], [s[0] for s in self.SCORES], v)
+            self.assertIn("lamp: what the score rests on", body, v)
+            self.assertEqual(len(re.findall(r'class="(?:cv|f-scores-pcv)"[^>]*data-i="\d"', body)), 6, v)  # one connector per run
             for (_, inner), (_c, _w, _h, mode, out) in zip(runs, self.SCORES):
                 shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", inner)))
                 self.assertIn(mode, shown, (v, mode))
