@@ -1227,7 +1227,6 @@ html:not(.js) .copy { display: none; }
   try { paused = localStorage.getItem("matagent-motion") === "paused"; } catch (e) {}
   function showBtn() {
     btn.setAttribute("aria-pressed", paused);
-    btn.setAttribute("aria-label", paused ? "Play animations" : "Pause animations");
   }
   if (btn) {
     document.documentElement.classList.add("motion");
