@@ -8,13 +8,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = ["opening", "modules", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
+EXPECTED_SECTIONS = ["opening", "modules", "literature", "gaps", "hypotheses", "planning", "vasp", "domains", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"33 sub-modes",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
   r"surrogate", r"uncertainty quantification", r"reflexion", r"local (llm|model)s?",
-  r"structure generation", r"send to maestro", 
-  r"slab generation", r"air-gapped"]
+  r"structure generation", r"send to maestro", r"air-gapped"]
 
 TOKENS = {
     "light": {"bg": "#F6F8FB", "dot": "#D5DDE8", "ink": "#0B1220", "muted": "#4B5970",
@@ -700,6 +699,55 @@ class SiteTests(unittest.TestCase):
         self.assertTrue(js)
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
+
+    def test_fig_vasp(self):
+        import html
+        self.assertEqual(EXPECTED_SECTIONS.index("vasp"), EXPECTED_SECTIONS.index("planning") + 1)
+        sec = re.search(r'<section id="vasp".*?</section>', PAGE, flags=re.S)
+        self.assertTrue(sec)
+        sec = sec.group(0)
+        self.assertIn("<h2>Prepares and runs VASP workflows</h2>", sec)
+        self.assertIn('<p class="kicker">07</p>', sec)
+        fig = re.search(r'<figure class="fig" data-fig="vasp" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for word in ("INCAR", "POSCAR", "KPOINTS", "POTCAR", "approval", "PENDING", "RUNNING", "COMPLETED",
+                         "NEB", "Birch–Murnaghan", "DOS", "illustrative"):
+                self.assertIn(word, label.group(1), (v, word))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the cluster
+            self.assertEqual(body.count('class="f-vasp-tok'), 3, v)  # one job per step of the adsorption run
+            self.assertEqual(body.count('class="f-vasp-bead'), 7, v)  # NEB: end points and five images
+            self.assertEqual(body.count('class="f-vasp-ept'), 7, v)  # EOS points
+            for part in ("f-vasp-gate", "f-vasp-fit", "f-vasp-dos", "f-vasp-ads"):
+                self.assertIn(part, body, (v, part))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+            shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S)))
+            for want in ("INCAR", "POSCAR", "KPOINTS", "POTCAR", "PENDING", "RUNNING", "COMPLETED", "Approve",
+                         "Birch–Murnaghan", "OUTCAR", "DOSCAR"):
+                self.assertIn(want, shown, (v, want))
+            # units carry a narrow no-break space (per text element: an axis tick and its unit are separate)
+            for t in re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S):
+                self.assertNotRegex(html.unescape(t), r"\d[ \u00a0](eV|Å|GPa)\b")
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 4)
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        ids = " ".join(cards)
+        for cid in ("C60", "C61", "C62", "C63", "C64", "C65"):
+            self.assertIn(cid, ids)
+        js = re.search(r'MAFig\.register\("vasp".*?<!-- figjs:vasp:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertIn("{scrub: true}", js.group(0))
 
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
