@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = ["opening", "modules", "literature", "gaps", "hypotheses", "planning", "vasp", "domains", "record", "improvement", "interfaces", "contact"]
+EXPECTED_SECTIONS = ["opening", "modules", "literature", "gaps", "hypotheses", "planning", "vasp", "domains", "scores", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"33 sub-modes",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
@@ -820,6 +820,72 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
         self.assertIn('"data-flip"', js.group(0))
+
+    # (code, what it measures, method chip, run token, run output); GCS, RCS, HFS confirmed (C44, C66); FS, ICS, ARS assumed (C45, C67)
+    SCORES = [("GCS", "Gap closure", "language-model judge", "GAR 2.1", "gaps, papers read"),
+              ("RCS", "RAG coverage", "term-count formula", "MMR 4.2 · 4.5 · 4.8", "analysis text"),
+              ("HFS", "Hypothesis formulation", "weighted sum of five", "HF 8.4", "hypothesis records"),
+              ("FS", "Plan feasibility", "resources and tools", "CDTP 3.3", "returned plan"),
+              ("ICS", "Ingestion completeness", "ingested ÷ expected", "KC 6.2 · 6.4", "ingested items"),
+              ("ARS", "Tool readiness", "tests + security", "SE 7.2", "newly created tool")]
+
+    def test_fig_scores(self):
+        import html
+        self.assertEqual(EXPECTED_SECTIONS.index("scores"), EXPECTED_SECTIONS.index("domains") + 1)
+        sec = re.search(r'<section id="scores".*?</section>', PAGE, flags=re.S)
+        self.assertTrue(sec)
+        sec = sec.group(0)
+        self.assertIn("<h2>Scores every run</h2>", sec)
+        self.assertIn('<p class="kicker">09</p>', sec)
+        # kickers follow the section order
+        kick = re.findall(r'<section id="([^"]+)"(?:(?!</section>).)*?<p class="kicker">(\d+)</p>', PAGE, flags=re.S)
+        self.assertEqual([k for _, k in kick], [f"{EXPECTED_SECTIONS.index(i) + 1:02d}" for i, _ in kick])
+        cap = re.search(r"<figcaption>(.*?)</figcaption>", sec, flags=re.S).group(1)
+        self.assertIn("model-assisted measures of a run's own output", html.unescape(cap))
+        fig = re.search(r'<figure class="fig" data-fig="scores" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig)
+            self.assertTrue(tag, v)
+            label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            self.assertGreaterEqual(len(label), 20)
+            for word in ("0–100", "model-assisted", "run's own output", "illustrative", "not comparable", "word overlap"):
+                self.assertIn(word, label, (v, word))
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the instrument cluster
+            gauges = re.findall(r'<g class="f-scores-gauge" data-k="(\w+)"[^>]*>(.*?)<!--/gauge-->', body, flags=re.S)
+            self.assertEqual([g[0] for g in gauges], [s[0] for s in self.SCORES], v)
+            for (code, inner), (_, what, how, _m, _o) in zip(gauges, self.SCORES):
+                shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", inner)))
+                for want in (code, what, how):
+                    self.assertIn(want, shown, (v, code, want))
+                for part in ("f-scores-needle", "f-scores-val", "f-scores-lamp", "f-scores-read"):
+                    self.assertIn(part, inner, (v, code, part))
+                self.assertIn(code, re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            runs = re.findall(r'<g class="f-scores-run" data-k="(\w+)"[^>]*>(.*?)</g>', body, flags=re.S)
+            self.assertEqual([r[0] for r in runs], [s[0] for s in self.SCORES], v)
+            for (_, inner), (_c, _w, _h, mode, out) in zip(runs, self.SCORES):
+                shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", inner)))
+                self.assertIn(mode, shown, (v, mode))
+                self.assertIn(out, shown, (v, out))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat|[Aa]ccura")
+            self.assertNotIn("{", body)
+        self.assertRegex(css(), r"\.f-scores-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertGreaterEqual(len(cards), 2)
+        allc = " ".join(cards)
+        for cid in ("C44", "C45", "C66", "C67"):
+            self.assertIn(cid, allc)
+        self.assertNotRegex(html.unescape(re.sub(r"<[^>]+>", " ", sec)), r"[Vv]alidat|[Aa]ccura")
+        js = re.search(r'MAFig\.register\("scores".*?<!-- figjs:scores:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
 
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
