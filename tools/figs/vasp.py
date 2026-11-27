@@ -59,12 +59,15 @@ def dos(e):
 assert dos(0) < 0.5 and dos(-2.35) > 2.4  # metallic: low DOS at the Fermi level, no gap
 
 # --- the scrub schedule (s); one clock for both variants. Wide maps 0..T_END onto the scroll range ---------------
-T = {"head": 0, "ahead": .3, "vac": 1.0, "dim": 1.7, "layer0": 2.0, "co": 3.4, "fan": 3.85, "file0": 3.95,
-     "bhead": 4.45, "appr": 4.5, "cluster": 4.6, "conn": 4.75, "press": 5.2, "ok2gate": 5.35, "gate": 5.45,
-     "gok": 5.8, "flow": 5.85, "tok0": 6.05, "fail": 7.6, "chead": 7.85, "parse": 7.9, "chip0": 8.05,
-     "ads": 8.15, "neb": 8.3, "eos": 8.4, "dos": 8.5, "legend": 9.6}
-TOK_PITCH, LAYER_PITCH, FILE_PITCH = .45, .25, .12
-T_END = 10.0
+T = {"head": 0, "ahead": .3, "vac": 1.1, "dim": 2.6, "layer0": 2.75, "co": 4.85, "fan": 5.3, "file0": 5.35,
+     "bhead": 5.8, "appr": 5.85, "cluster": 5.95, "conn": 6.05, "press": 6.4, "ok2gate": 6.55, "gate": 6.65,
+     "gok": 7.0, "flow": 7.05, "tok0": 7.15, "fail": 9.55, "chead": 9.6, "parse": 9.65, "chip0": 9.7,
+     "ads": 9.8, "neb": 9.8, "eos": 9.95, "dos": 10.1}
+TOK_PITCH, LAYER_PITCH, FILE_PITCH = .8, .42, .12
+TOK = {"run": .12, "pulse": .26, "done": .62, "tick": .74, "end": .86}  # a job's beats, from entering PENDING
+# steps are submitted in order: the next job enters PENDING only after the previous one is COMPLETED (C62)
+assert TOK_PITCH >= .75 and TOK_PITCH >= TOK["done"] + .12
+T_END = 12.0
 
 
 class Rec:
@@ -151,7 +154,6 @@ FILES = [  # name, sub-label (<= 22), right tag, dashed (stays on the cluster)
     ("INCAR", f"ENCUT 1.3 × max ENMAX", "PRESET", False),
     ("POSCAR", "slab + CO positions", "", False),
     ("KPOINTS", "Γ-centred mesh", "", False),
-    ("POTCAR", "assembled on cluster", "LICENSED", True),
 ]
 
 
@@ -225,19 +227,38 @@ def gate(pre, x, y, w, h, vertical, rec):
 
 LANES = ["PENDING", "RUNNING", "COMPLETED"]
 JOBS = ["slab", "slab+CO", "CO (g)"]  # VW 9.4's three calculations, submitted in this order
+RAN = ["ran 1.6 h", "ran 2.3 h", "ran 0.2 h"]  # sacct elapsed, illustrative
 
 
 def token(x, y, w, k, p_off, r_off, rec, ybounds):
-    """One Slurm job: enters PENDING (offset p_off), moves to RUNNING (r_off, ionic-steps bar), ends COMPLETED."""
+    """One Slurm job: enters PENDING (offset p_off), moves to RUNNING (r_off; an indeterminate pulse, no progress
+    implied), ends COMPLETED."""
     t = T["tok0"] + TOK_PITCH * k
-    rec(t, .9, *ybounds)
+    rec(t, TOK["end"], *ybounds)
     return (f'<g class="f-vasp-tok" data-t="{_tv(t)}" data-p="{f(p_off[0])} {f(p_off[1])}" data-r="{f(r_off[0])} {f(r_off[1])}">'
             f'<rect class="f-vasp-tr" x="{f(x)}" y="{f(y)}" width="{f(w)}" height="26" rx="6"/>'
             f'<text class="sub f-vasp-pi" x="{f(x + 10)}" y="{f(y + 17.5)}">{escape(JOBS[k])}</text>'
-            f'<rect class="f-vasp-run" x="{f(x + 4)}" y="{f(y + 21)}" width="{f(w - 8)}" height="3" rx="1.5" opacity="0" '
-            f'data-x0="{f(x + 4)}"/>'
+            f'<rect class="f-vasp-run" x="{f(x + 4)}" y="{f(y + 21)}" width="28" height="3" rx="1.5" opacity="0" '
+            f'data-tr="{f(w - 36)}"/>'
             f'<g class="f-vasp-tick"><circle cx="{f(x + w - 13)}" cy="{f(y + 13)}" r="8"/>'
             f'<path d="M{f(x + w - 17)},{f(y + 13.5)} l3,3 l5.5,-6.5"/></g></g>')
+
+
+def ghosts(k, pend, run, w, rec):
+    """The trail a job leaves once it moves on: a faint outline at its PENDING place (x, y), its elapsed time at its
+    RUNNING place."""
+    t = T["tok0"] + TOK_PITCH * k
+    g = lambda x, y, s: (f'<rect class="f-vasp-gh" x="{f(x)}" y="{f(y)}" width="{f(w)}" height="26" rx="6"/>'
+                         f'<text class="sub f-vasp-pm" x="{f(x + 10)}" y="{f(y + 17.5)}">{escape(s)}</text>')
+    return (rv(g(*pend, JOBS[k]), t + TOK["run"] + .12, rec, pend[1], pend[1] + 26, d=.15)
+            + rv(g(*run, RAN[k]), t + TOK["done"] + .12, rec, run[1], run[1] + 26, d=.15))
+
+
+def potcar(x, y, rec):
+    """POTCAR, assembled on the cluster with the first job's script; it never leaves the cluster (dashed)."""
+    return rv(f'<g class="f-vasp-pot"><rect x="{f(x)}" y="{f(y)}" width="88" height="24" rx="6"/>'
+              f'<path class="f-vasp-page pk" d="M{f(x + 9)},{f(y + 5)} h7 l4,4 v10 h-11 z"/>'
+              f'<text class="sub f-vasp-pi" x="{f(x + 28)}" y="{f(y + 16.5)}">POTCAR</text></g>', T["tok0"], rec, y, y + 24)
 
 
 def cluster(pre, x, y, w, h, wide, rec):
@@ -255,8 +276,10 @@ def cluster(pre, x, y, w, h, wide, rec):
             P.append(f'<rect class="f-vasp-lane" x="{f(lx)}" y="{f(top)}" width="{f(lw)}" height="{f(bot - top)}" rx="8"/>'
                      f'<text class="tag f-vasp-pk" x="{f(lx + 10)}" y="{f(top - 8)}">{name}</text>')
         tw = lw - 16
+        P.append(potcar(x + 214, y + 9, rec))
         for k in range(3):
             ty = top + 8 + 31 * k
+            P.append(ghosts(k, (lx0 + 8, ty), (lx0 + lw + gap + 8, ty), tw, rec))
             P.append(token(lx0 + 2 * (lw + gap) + 8, ty, tw, k, (-2 * (lw + gap), 0), (-(lw + gap), 0), rec, (ty, ty + 26)))
     else:
         P.append(f'<text class="sub f-vasp-pm" x="{f(x + 16)}" y="{f(y + 44)}">sbatch over SSH</text>')
@@ -267,12 +290,14 @@ def cluster(pre, x, y, w, h, wide, rec):
             P.append(f'<rect class="f-vasp-lane" x="{f(x + 12)}" y="{f(ly)}" width="{f(w - 24)}" height="{bh}" rx="8"/>'
                      f'<text class="tag f-vasp-pk" x="{f(x + 22)}" y="{f(ly + 20)}">{name}</text>')
         ly = top + 2 * (bh + gap)
+        P.append(potcar(x + w - 16 - 88, y + 30, rec))
         for k in range(3):
             tx = x + 12 + k * (tw + 8)
+            P.append(ghosts(k, (tx, top + 27), (tx, top + bh + gap + 27), tw, rec))
             P.append(token(tx, ly + 27, tw, k, (0, -2 * (bh + gap)), (0, -(bh + gap)), rec, (top + 27, ly + 53)))
         assert 10 + max(map(len, JOBS)) * CW["narrow"] + 26 <= tw
-    toks = [m for m in P[3:] if m.startswith('<g class="f-vasp-tok"')]
-    lanes = [m for m in P[3:] if not m.startswith('<g class="f-vasp-tok"')]
+    toks = [m for m in P[3:] if not m.startswith('<rect class="f-vasp-lane"')]
+    lanes = [m for m in P[3:] if m.startswith('<rect class="f-vasp-lane"')]
     return (rv(f'<g class="f-vasp-pnl">{"".join(P[:3])}</g>', T["cluster"], rec, y, y + h, d=.4)
             + rv("".join(lanes), T["cluster"] + .15, rec, y, y + h) + "".join(toks))
 
@@ -302,7 +327,7 @@ def chips(xr, y, rec, wide, rows=1):
 def _card(x, y, w, h, tag, t, rec, inner, cls=""):
     head = (f'<rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="10"/>'
             f'<text class="tag" x="{f(x + 14)}" y="{f(y + 22)}">{tag}</text>')
-    return rv(f'<g class="card {cls}">{head}</g>', t, rec, y, y + h, dy=8) + inner
+    return f'<g class="card {cls}">{head}</g>' + inner
 
 
 def ads_card(x, y, w, h, rec, wide):
@@ -342,6 +367,8 @@ def _hermite(ys, n=10):
 
 
 NEB_PATH = _hermite(NEB_E)
+NEB_T = {"guide": .25, "beads": .3, "relax": .7, "climb": 1.0, "path": 1.35, "ci": 1.45, "arrow": 1.6, "subs": 1.7}
+assert NEB_T["relax"] + .35 <= NEB_T["climb"] + .35 <= NEB_T["path"]  # the CI climbs last; the path follows
 assert max(e for _, e in NEB_PATH) <= max(NEB_E) + 1e-9  # no overshoot above the climbing image
 
 
@@ -362,27 +389,30 @@ def neb_card(x, y, w, h, rec, wide):
             f'<text class="lbl" x="{f((px0 + px1) / 2)}" y="{f(py1 + 24)}" text-anchor="middle">reaction coordinate</text>'
             f'<text class="sub" x="{f(px1)}" y="{f(py1 + 24)}" text-anchor="middle">FS</text>')
     P.append(rv(axes, t + .1, rec, y + 28, py1 + 28))
-    d = "M" + " L".join(f"{f(X(s))},{f(Y(e))}" for s, e in NEB_PATH)
-    P.append(dr(d, t + .2, rec, py0, py1, "f-vasp-path", dur=.5))
-    # images slide along the path from IS to their places; IS and FS are the relaxed end points
+    # the images start on the line between the relaxed end points (the interpolated guess, shown only while they
+    # relax), relax onto their energies, the climbing image last; then the path is drawn through them
+    lin = lambda s: NEB_E[0] + (NEB_E[-1] - NEB_E[0]) * s
+    P.append(f'<path class="f-vasp-guide" d="M{f(X(0))},{f(Y(lin(0)))} L{f(X(1))},{f(Y(lin(1)))}" opacity="0" '
+             f'data-t="{_tv(t + NEB_T["guide"])}" data-t2="{_tv(t + NEB_T["climb"] + .1)}"/>')
     for k, e in enumerate(NEB_E):
         bx, by = X(k / 6), Y(e)
-        pts = [(X(s), Y(v)) for s, v in NEB_PATH if s <= k / 6 + 1e-9][::3] + [(bx, by)]
-        kf = " ".join(f"{f(px - bx)},{f(py - by)}" for px, py in pts)
-        tb = t + .3 + .06 * k
-        rec(tb, .6, py0, py1)
+        tb, t2 = t + NEB_T["beads"] + .04 * k, t + (NEB_T["climb"] if k == CI else NEB_T["relax"])
+        rec(t2, .35, py0, py1)
         cls = "f-vasp-bead end" if k in (0, 6) else "f-vasp-bead"
-        P.append(f'<g class="{cls}" data-t="{_tv(tb)}" data-kf="{kf}"><circle cx="{f(bx)}" cy="{f(by)}" r="5.5"/></g>')
+        P.append(f'<g class="{cls}" data-t="{_tv(tb)}" data-t2="{_tv(t2)}" data-dy="{f(Y(lin(k / 6)) - by)}">'
+                 f'<circle cx="{f(bx)}" cy="{f(by)}" r="5.5"/></g>')
+    d = "M" + " L".join(f"{f(X(s))},{f(Y(e))}" for s, e in NEB_PATH)
+    P.append(dr(d, t + NEB_T["path"], rec, py0, py1, "f-vasp-path", dur=.4))
     cx_, cy_ = X(CI / 6), Y(NEB_E[CI])
     ci = (f'<circle class="f-vasp-ci" cx="{f(cx_)}" cy="{f(cy_)}" r="9.5"/>'
           f'<text class="sub f-vasp-acc" x="{f(cx_ + 14)}" y="{f(cy_ + 1)}">CI</text>')
-    P.append(rv(ci, t + 1.0, rec, cy_ - 10, cy_ + 10))
+    P.append(rv(ci, t + NEB_T["ci"], rec, cy_ - 10, cy_ + 10))
     # the arrowhead marker would show before the line is drawn, so the arrow fades in instead
-    P.append(rv(f'<path class="f-vasp-bar" d="M{f(cx_)},{f(Y(0) - 1)} V{f(cy_ + 12)}" marker-end="url(#arr)"/>', t + 1.1, rec, cy_, Y(0), d=.2, dy=6))
+    P.append(rv(f'<path class="f-vasp-bar" d="M{f(cx_)},{f(Y(0) - 1)} V{f(cy_ + 12)}" marker-end="url(#arr)"/>', t + NEB_T["arrow"], rec, cy_, Y(0), d=.2, dy=6))
     subs = [("IDPP · climbing image", ""), (f"barrier 0.62{NB}eV", " f-vasp-acc")]
     sy = [py1 + 46 + 19 * k for k in range(2)]
     P.append(rv("".join(f'<text class="sub{c}" x="{f(x + 14)}" y="{f(yy)}">{s}</text>' for (s, c), yy in zip(subs, sy)),
-                t + 1.25, rec, sy[0] - 12, sy[-1] + 4))
+                t + NEB_T["subs"], rec, sy[0] - 12, sy[-1] + 4))
     return _card(x, y, w, h, "VW 9.5 · NEB", t, rec, "".join(P), "f-vasp-neb")
 
 
@@ -395,7 +425,7 @@ def eos_card(x, y, w, h, rec, wide):
     assert max(e for _, e in EOS_PTS) < ehi
     P = []
     axes = (f'<path class="f-vasp-ax" d="M{f(px0 - 8)},{f(py0 - 4)} V{f(py1 + 6)} H{f(px1 + 6)}"/>'
-            f'<text class="sub" x="{f(x + 14)}" y="{f(y + 40)}">meV</text>'
+            f'<text class="sub" x="{f(x + 14)}" y="{f(y + 40)}">E − E₀ (meV/atom)</text>'
             f'<text class="sub" x="{f(px0 - 14)}" y="{f(Y(0) + 4.5)}" text-anchor="end">0</text>'
             f'<text class="sub" x="{f(px0 - 14)}" y="{f(Y(30) + 4.5)}" text-anchor="end">30</text>'
             f'<path class="f-vasp-ax" d="M{f(px0 - 11)},{f(Y(30))} h3"/>'
@@ -413,12 +443,12 @@ def eos_card(x, y, w, h, rec, wide):
     tf = t + .75
     rec(tf, .45, py0, py1)
     P.append(f'<g class="f-vasp-rv" data-t="{_tv(tf - .05)}" data-d="0.1"><path class="f-vasp-fit" d="M{fit}" data-d0="M{flat}" data-t="{_tv(tf)}"/></g>')
-    bmx = (px0 + px1) / 2
-    P.append(rv(f'<text class="lbl" x="{f(bmx)}" y="{f(py0 + 8)}" text-anchor="middle">Birch–Murnaghan</text>', tf + .3, rec, py0 - 4, py0 + 12))
+    # top right is clear of both arms (the expansion side rises slowly) and of the y-axis label
+    P.append(rv(f'<text class="lbl" x="{f(px1)}" y="{f(py0 + 12)}" text-anchor="end">Birch–Murnaghan</text>', tf + .3, rec, py0, py0 + 16))
     vx = X(V0)
     P.append(rv(f'<path class="f-vasp-v0" d="M{f(vx)},{f(Y(0) - 8)} V{f(py1 + 6)}"/>'
                 f'<text class="sub f-vasp-acc" x="{f(vx + 6)}" y="{f(Y(0) - 10)}">V₀</text>', tf + .45, rec, Y(0) - 22, py1 + 6))
-    subs = [(f"V₀ 12.0{NB}Å³, B₀ 140{NB}GPa", " f-vasp-acc"), ("B′ 5.0", "")]
+    subs = [(f"V₀ 12.0{NB}Å³, B₀ 140{NB}GPa", " f-vasp-acc"), ("B₀′ 5.0", "")]
     sy = [py1 + 46 + 19 * k for k in range(2)]
     for (s, _), yy in zip(subs, sy):
         assert len(s) <= 22, s
@@ -438,10 +468,9 @@ def dos_card(x, y, w, h, rec, wide):
     P = []
     axes = (f'<path class="f-vasp-ax" d="M{f(px0 - 8)},{f(py0 - 4)} V{f(py1 + 6)} H{f(px1 + 6)}"/>'
             f'<text class="sub" x="{f(x + 14)}" y="{f(y + 40)}">states/eV</text>'
-            + "".join(f'<path class="f-vasp-ax" d="M{f(X(e))},{f(py1 + 6)} v4"/>'
-                      f'<text class="sub" x="{f(X(e))}" y="{f(py1 + 24)}" text-anchor="middle">{"0" if e == 0 else "−" + str(-e)}</text>'
-                      for e in (-6, -3, 0))
-            + f'<text class="sub" x="{f(px1 + 4)}" y="{f(py1 + 24)}" text-anchor="end">eV</text>')
+            + "".join(f'<path class="f-vasp-ax" d="M{f(X(e))},{f(py1 + 6)} v4"/>' for e in (-6, -3, 0))
+            + "".join(f'<text class="sub" x="{f(X(e))}" y="{f(py1 + 24)}" text-anchor="middle">{s}</text>' for e, s in ((-6, "−6"), (0, "0")))
+            + f'<text class="lbl" x="{f(X(-3))}" y="{f(py1 + 24)}" text-anchor="middle">E − E<tspan dy="3">F</tspan><tspan dy="-3"> (eV)</tspan></text>')
     P.append(rv(axes, t + .1, rec, y + 28, py1 + 28))
     P.append(rv(f'<path class="f-vasp-dosf" d="M{f(X(lo))},{f(Y(0))} L{line} L{f(X(hi))},{f(Y(0))} Z"/>', t + .75, rec, py0, py1, d=.35))
     P.append(dr(f"M{line}", t + .2, rec, py0, py1, "f-vasp-dos", dur=.6))
@@ -460,18 +489,22 @@ def dos_card(x, y, w, h, rec, wide):
 LABEL = ("VASP workflows, VW 9.1–9.7, in three panels. (a) Structure bench: a Cu(111) slab is built from bulk copper and "
          f"the Miller index (111), with 15{NB}Å of vacuum, and CO is placed on an ontop site. Each step writes INCAR (a "
          "preset for its workflow, ENCUT 1.3 times the largest ENMAX), POSCAR and KPOINTS (a Γ-centred mesh), returned "
-         "for review; POTCAR is assembled on the cluster from your licensed set and never leaves it. (b) Governed queue: "
+         "for review. (b) Governed queue: "
          "one approval per run, in chat or the Approval Inbox, shows the planned steps, the first step's inputs, the "
          "Slurm profile and a core-hour ceiling, and a step outside the plan asks again. Until you approve, a gate holds "
-         "the jobs; then the steps are submitted in order with sbatch over SSH, and each Slurm job goes from PENDING to "
-         "RUNNING to COMPLETED. A failed state keeps Slurm's reason and is not resubmitted. (c) Results, fetched and "
+         "the jobs; then the steps are submitted in order with sbatch over SSH, each after the previous one completes, and "
+         "each Slurm job goes from PENDING to RUNNING to COMPLETED, leaving its elapsed time. POTCAR is assembled on the "
+         "cluster from your licensed set and never leaves it. A failed state keeps Slurm's reason and is not "
+         "resubmitted. (c) Results, fetched and "
          "parsed from OUTCAR, vasprun.xml, CONTCAR, DOSCAR and EIGENVAL: the adsorption energy, E(slab+CO) minus E(slab) "
-         f"minus E(CO), {E_ADS}{NB}eV; NEB images interpolated between the relaxed end points, with a climbing image and "
+         f"minus E(CO), {E_ADS}{NB}eV. NEB, EOS and DOS are each their own run through the same queue: NEB images "
+         "interpolated between the relaxed end points relax onto the energy path, with a climbing image and "
          f"a barrier of 0.62{NB}eV; equation-of-state points fitted with the Birch–Murnaghan equation, giving V₀ "
-         f"12.0{NB}Å³ per atom, B₀ 140{NB}GPa and B′ 5.0; and the DOS of copper, with the Fermi level and no band gap. "
+         f"12.0{NB}Å³ per atom, B₀ 140{NB}GPa and B₀′ 5.0; and the DOS of copper against E − E_F, with the Fermi level "
+         "and no band gap. "
          "All values are illustrative.")
 LEGEND = [("amber", "waits for your approval"), ("okc", "Slurm job completed"), ("flow", "submitted after approval"),
-          ("dash", "never leaves the cluster")]
+          ("dash", "POTCAR: stays on the cluster")]
 
 
 # ---------------------------------------------------------------------------------------------------- layouts ----
@@ -487,13 +520,12 @@ def _wide():
     X, CT, TL = 70, 112, 268
     sl, cb = slab(pre, X, CT, TL, rec, True)
     P.append(sl)
-    FX, FW, FH, FP = 322, 194, 54, 66
-    fy = [108 + FP * k for k in range(4)]
+    FX, FW, FH, FP = 322, 194, 54, 84
+    fy = [118 + FP * k for k in range(3)]
     assert fy[-1] + FH <= cb + 2
     ox, oy = X + CELL_W + 4, TL + 2 * DZ
     for k, y in enumerate(fy):
-        cls = "cv f-vasp-fan" + (" f-vasp-dsh" if FILES[k][3] else "")
-        P.append(rv(f'<path class="{cls}" d="{curve_d(ox, oy, FX - 2, y + FH / 2)}" marker-end="url(#arr)"/>',
+        P.append(rv(f'<path class="cv f-vasp-fan" d="{curve_d(ox, oy, FX - 2, y + FH / 2)}" marker-end="url(#arr)"/>',
                     T["fan"] + .04 * k, rec, min(oy, y + FH / 2), max(oy, y + FH / 2), d=.25))
         P.append(file_card(FX, y, FW, FH, k, rec, True))
     # the three written files: a brace, then on to the approval (shown) and the gate (submitted)
@@ -524,12 +556,13 @@ def _wide():
     lane3 = CX + 12 + 2 * ((CWd - 40) / 3 + 8) + (CWd - 40) / 6
     P.append(rv(f'<path class="cv" d="M{f(lane3)},{f(CY + CH + 2)} V{f(RY - 18)}" marker-end="url(#arr)"/>', T["parse"], rec, CY + CH, RY - 16, d=.2))
     P.append(chips(1070, RY - 14, rec, True))
+    P.append(rv(f'<text class="lbl" x="348" y="{f(RY)}">NEB, EOS and DOS: own runs, same queue</text>', T["chead"] + .1, rec, RY - 12, RY + 4))
     cy, chh = 474, 222
     P.append(ads_card(30, cy, 222, chh, rec, True))
     P.append(neb_card(268, cy, 258, chh, rec, True))
     P.append(eos_card(542, cy, 258, chh, rec, True))
     P.append(dos_card(816, cy, 254, chh, rec, True))
-    P.append(rv(legend(LEGEND, 30, H - 34) + note(30, H - 8), T["legend"], rec, H - 50, H - 4))
+    P.append(legend(LEGEND, 30, H - 34) + note(30, H - 8))
     _check_scroll(rec, H)
     return svg(W, H, "".join(P), "wide", LABEL)
 
@@ -537,7 +570,7 @@ def _wide():
 def _check_scroll(rec, H):
     """Each element finishes inside the viewport (below the sticky header) at the scroll position where the scrub
     reaches its end time. Runtime range: figure top at 80 % of the viewport -> figure centre at 45 %."""
-    for vh in (800, 900):
+    for vh in (650, 700, 800, 900):
         for k in (0.831, 0.94):  # SVG px per unit at 1000 px and >= 1280 px
             hfig = VIS["pad"] + H * k + VIS["below"]
             travel = 0.35 * vh + hfig / 2
@@ -557,11 +590,11 @@ def _narrow():
     P.append(sl)
     FX, FW, FH, FP = 60, 284, 58, 68
     fy0 = cb + 26
-    fy = [fy0 + FP * k for k in range(4)]
+    fy = [fy0 + FP * k for k in range(3)]
     tx_, ox = 34, X + 16
     for k, y in enumerate(fy):
         ym = y + FH / 2
-        cls = "cv f-vasp-fan" + (" f-vasp-dsh" if FILES[k][3] else "")
+        cls = "cv f-vasp-fan"
         d = (f"M{f(ox)},{f(cb + 2)} C{f(ox)},{f(cb + 16)} {f(tx_)},{f(cb + 8)} {f(tx_)},{f(cb + 24)} V{f(ym - 14)} "
              f"C{f(tx_)},{f(ym - 3)} {f(tx_ + 6)},{f(ym)} {f(FX - 2)},{f(ym)}")
         P.append(rv(f'<path class="{cls}" d="{d}" marker-end="url(#arr)"/>', T["fan"] + .04 * k, rec, 0, 0, d=.25))
@@ -589,15 +622,16 @@ def _narrow():
     P.append(rv(badge(16, RY, "c", "FETCHED · PARSED"), T["chead"], rec, 0, 0))
     P.append(rv(f'<path class="cv" d="M320,{f(CY + CH + 2)} V{f(RY + 6)}" marker-end="url(#arr)"/>', T["parse"], rec, 0, 0, d=.2))
     P.append(chips(344, RY + 10, rec, False, rows=2))
-    y = RY + 10 + 32 + 24 + 16
+    cue_y = RY + 10 + 32 + 24 + 20
+    P.append(rv(f'<text class="lbl" x="16" y="{f(cue_y)}">NEB, EOS and DOS: own runs, same queue</text>', T["chead"] + .1, rec, 0, 0))
+    y = cue_y + 16
     P.append(ads_card(16, y, 328, 116, rec, False))
     y += 116 + 16
     for fn in (neb_card, eos_card, dos_card):
         P.append(fn(16, y, 328, 214, rec, False))
         y += 214 + 16
     ly = y + 16
-    P.append(rv("".join(legend([it], 16, ly + 24 * k) for k, it in enumerate(LEGEND)) + note(16, ly + 24 * 4 + 4),
-                T["legend"], rec, 0, 0))
+    P.append("".join(legend([it], 16, ly + 24 * k) for k, it in enumerate(LEGEND)) + note(16, ly + 24 * 4 + 4))
     H = ly + 24 * 4 + 18
     return svg(W, H, "".join(P), "narrow", LABEL)
 
@@ -610,7 +644,6 @@ JS = """MAFig.register("vasp", function (root, variant) {
   var pair = function (el, a) { return el.getAttribute(a).split(" ").map(Number); };
   // origins set once, at scale 1 (an origin passed per tween is smoothed against the from-scale)
   gsap.set(q(".f-vasp-okb, .f-vasp-tick, .f-vasp-gok, .f-vasp-gokc"), {transformOrigin: "50% 50%"});
-  gsap.set(q(".f-vasp-run"), {svgOrigin: function (i, el) { return el.getAttribute("data-x0") + " 0"; }});
   var tl = gsap.timeline({defaults: {ease: "power2.out"}});
   // (a) the cell's vacuum and layers, CO lowered onto its site, the input files fanning out; generic reveals at
   // their own times, connectors drawn on
@@ -624,30 +657,39 @@ JS = """MAFig.register("vasp", function (root, variant) {
   var okb = one(".f-vasp-okb"), bars = one(".f-vasp-bars");
   tl.from(okb, {opacity: 0, scale: 0, duration: .2, ease: "back.out(2.5)"}, T(okb))
     .from(bars, {x: num(bars, "data-dx"), y: num(bars, "data-dy"), duration: .35, ease: "power2.in"}, T(bars));
-  // one job per step, in order: PENDING, RUNNING (its ionic-steps bar fills), COMPLETED, then the tick
+  // one job per step, in order (the next enters only after this one is COMPLETED): PENDING, RUNNING (an
+  // indeterminate pulse: Slurm reports no progress within a job), COMPLETED, then the tick
   q(".f-vasp-tok").forEach(function (k) {
-    var t = T(k), p = pair(k, "data-p"), r = pair(k, "data-r"), bar = k.querySelector(".f-vasp-run"),
+    var t = T(k), p = pair(k, "data-p"), r = pair(k, "data-r"), run = k.querySelector(".f-vasp-run"),
       tick = k.querySelector(".f-vasp-tick");
-    tl.fromTo(k, {x: p[0], y: p[1], opacity: 0}, {x: p[0], y: p[1], opacity: 1, duration: .12}, t)
-      .to(k, {x: r[0], y: r[1], duration: .15, ease: "power2.inOut"}, t + .15)
-      .fromTo(bar, {opacity: 1, scaleX: 0}, {opacity: 1, scaleX: 1, duration: .25, ease: "none"}, t + .3)
-      .to(bar, {opacity: 0, duration: .05}, t + .56)
-      .to(k, {x: 0, y: 0, duration: .15, ease: "power2.inOut"}, t + .6)
-      .from(tick, {opacity: 0, scale: 0, duration: .15, ease: "back.out(2.5)"}, t + .75);
+    tl.fromTo(k, {x: p[0], y: p[1], opacity: 0}, {x: p[0], y: p[1], opacity: 1, duration: .1}, t)
+      .to(k, {x: r[0], y: r[1], duration: .12, ease: "power2.inOut"}, t + __RUN__)
+      .fromTo(run, {x: 0, opacity: 1}, {x: num(run, "data-tr"), opacity: 1, duration: .12, repeat: 2, yoyo: true, ease: "sine.inOut"}, t + __PULSE__)
+      .to(run, {opacity: 0, duration: .03}, t + __DONE__ - .03)
+      .to(k, {x: 0, y: 0, duration: .12, ease: "power2.inOut"}, t + __DONE__)
+      .from(tick, {opacity: 0, scale: 0, duration: .12, ease: "back.out(2.5)"}, t + __TICK__);
   });
-  // (c) NEB: each image slides along the path from the initial state to its place
+  // (c) NEB: the images appear on the interpolated line between the relaxed end points, relax onto their
+  // energies (the climbing image last); the guide line fades as they go
+  q(".f-vasp-guide").forEach(function (g) {
+    tl.fromTo(g, {opacity: 0}, {opacity: 1, duration: .2}, T(g)).to(g, {opacity: 0, duration: .25}, num(g, "data-t2"));
+  });
   q(".f-vasp-bead").forEach(function (b) {
-    var t = T(b), kf = b.getAttribute("data-kf").split(" ").map(function (s) { return s.split(",").map(Number); });
-    tl.fromTo(b, {x: kf[0][0], y: kf[0][1], opacity: 0}, {x: kf[0][0], y: kf[0][1], opacity: 1, duration: .06}, t);
-    if (kf.length > 1) tl.to(b, {keyframes: {x: kf.map(function (v) { return v[0]; }), y: kf.map(function (v) { return v[1]; })},
-      duration: .5, ease: "none"}, t + .06);
+    var dy = num(b, "data-dy");
+    tl.fromTo(b, {y: dy, opacity: 0}, {y: dy, opacity: 1, duration: .1}, T(b))
+      .to(b, {y: 0, duration: .35, ease: "power2.inOut"}, num(b, "data-t2"));
   });
   // EOS: a flat start bends into the Birch–Murnaghan fit through the points
   var fit = one(".f-vasp-fit");
   tl.from(fit, {attr: {d: fit.getAttribute("data-d0")}, duration: .45, ease: "power2.inOut"}, T(fit));
   tl.set({}, {}, __END__);
+  if (variant === "narrow") tl.timeScale(1.4);  // narrow plays once, not scrubbed
   return {intro: tl};
-}, {scrub: true});""".replace("__END__", _tv(T_END))
+}, {scrub: true});"""
+for _k, _v in {"__END__": T_END, "__RUN__": TOK["run"], "__PULSE__": TOK["pulse"], "__DONE__": TOK["done"],
+               "__TICK__": TOK["tick"]}.items():
+    JS = JS.replace(_k, _tv(_v))
+assert "__" not in JS
 
 
 def build():

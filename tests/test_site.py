@@ -13,7 +13,8 @@ FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|e
   r"\bvalidated\b", r"33 sub-modes",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
   r"surrogate", r"uncertainty quantification", r"reflexion", r"local (llm|model)s?",
-  r"structure generation", r"send to maestro", r"air-gapped"]
+  r"structure generation", r"send to maestro", 
+  r"slab generation", r"air-gapped"]
 
 TOKENS = {
     "light": {"bg": "#F6F8FB", "dot": "#D5DDE8", "ink": "#0B1220", "muted": "#4B5970",
@@ -731,13 +732,14 @@ class SiteTests(unittest.TestCase):
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
             self.assertNotRegex(body, r"<animate|[Vv]alidat")
+            self.assertNotRegex(body, r"\{\w*\(")  # no uninterpolated f-string placeholder, e.g. y="{f(RY)}"
             shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S)))
             for want in ("INCAR", "POSCAR", "KPOINTS", "POTCAR", "PENDING", "RUNNING", "COMPLETED", "Approve",
                          "Birch–Murnaghan", "OUTCAR", "DOSCAR"):
                 self.assertIn(want, shown, (v, want))
             # units carry a narrow no-break space (per text element: an axis tick and its unit are separate)
             for t in re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S):
-                self.assertNotRegex(html.unescape(t), r"\d[ \u00a0](eV|Å|GPa)\b")
+                self.assertNotRegex(html.unescape(t), r"\d[ \u00a0](eV|Å|GPa)(?![A-Za-z])")
         cards = re.findall(r'<article class="card"[^>]*>', sec)
         self.assertEqual(len(cards), 4)
         for card in cards:
