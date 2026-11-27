@@ -586,6 +586,47 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    def test_fig_gaps(self):
+        self.assertEqual(EXPECTED_SECTIONS.index("gaps"), EXPECTED_SECTIONS.index("literature") + 1)
+        sec = re.search(r'<section id="gaps".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Finds what is missing</h2>", sec)
+        fig = re.search(r'<figure class="fig" data-fig="gaps" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for word in ("GAR 2.1", "quote", "closure score", "LCA 5.1", "consensus", "contradiction", "not compared"):
+                self.assertIn(word, label.group(1), (v, word))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)  # closure score, gaps and values are illustrative
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the closure judge
+            for part in ("f-gaps-cell", "f-gaps-quote", "f-gaps-paper", "f-gaps-odo", "f-gaps-brk", "f-gaps-band"):
+                self.assertIn(part, body, (v, part))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 3)  # gaps by rules, closure judged against papers, where sources disagree
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        js = re.search(r'MAFig\.register\("gaps".*?<!-- figjs:gaps:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
+    def test_claims_ids_unique(self):
+        # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
+        p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"
+        if not p.exists():
+            self.skipTest("claims register (CATAGENT docs/site/claims.md) not present")
+        ids = re.findall(r"^\|\s*(C\d{2,})\s*\|", p.read_text(encoding="utf-8"), flags=re.M)
+        self.assertTrue(ids)
+        self.assertEqual([i for i in set(ids) if ids.count(i) > 1], [])
+
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
         self.assertTrue(m)
