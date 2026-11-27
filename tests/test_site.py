@@ -835,7 +835,7 @@ class SiteTests(unittest.TestCase):
         sec = re.search(r'<section id="scores".*?</section>', PAGE, flags=re.S)
         self.assertTrue(sec)
         sec = sec.group(0)
-        self.assertIn("<h2>Scores every run</h2>", sec)
+        self.assertIn("<h2>Scores its own output</h2>", sec)
         self.assertIn('<p class="kicker">09</p>', sec)
         # kickers follow the section order
         kick = re.findall(r'<section id="([^"]+)"(?:(?!</section>).)*?<p class="kicker">(\d+)</p>', PAGE, flags=re.S)
