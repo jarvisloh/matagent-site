@@ -70,7 +70,7 @@ TOK = {"run": .12, "pulse": .26, "done": .5, "tick": .62, "fetch": .74, "end": .
 # steps are submitted in order: the next job enters PENDING only after the previous one is COMPLETED and its
 # outputs fetched and parsed (C62)
 assert TOK_PITCH >= .75 and round(TOK_PITCH - TOK["end"], 6) >= .05
-T["parse"] = T["chip0"] = T["chead"] = T["tok0"] + TOK["fetch"] - .1  # results row opens with the first fetch
+T["parse"] = T["chip0"] = T["chead"] = T["tok0"] + TOK["end"]  # results row opens once the first fetch reaches it
 assert round(T["tok0"] + 2 * TOK_PITCH + TOK["end"], 6) <= T["fail"] <= T["ads"]
 T_END = 12.0
 
@@ -320,13 +320,13 @@ def fetch_dots(x, y0, y1, rec):
 
 
 # ----------------------------------------------------------------------------------------------- (c) results ----
-CHIPS = ["OUTCAR", "vasprun.xml", "CONTCAR", "DOSCAR", "EIGENVAL"]
+CHIPS = ["OUTCAR", "vasprun.xml", "CONTCAR"]  # what the adsorption jobs return; DOSCAR/EIGENVAL sit on the DOS card (C65)
 
 
-def chips(xr, y, rec, wide, rows=1):
-    """Parser chips, right-aligned to xr; rows=2 splits them 3 + 2."""
+def chips(xr, y, rec, wide):
+    """Parser chips, right-aligned to xr, in one row."""
     cw = CW["wide" if wide else "narrow"]
-    groups = [CHIPS] if rows == 1 else [CHIPS[:3], CHIPS[3:]]
+    groups = [CHIPS]
     P, k = [], 0
     for r, g in enumerate(groups):
         ws = [len(c) * cw + 18 for c in g]
@@ -524,14 +524,14 @@ LABEL = ("VASP workflows, VW 9.1–9.7, in three panels. (a) Structure bench: a 
          "cluster from your licensed set and never leaves it. Each finished job's folder is fetched and parsed before "
          "the next job is submitted. A failed state keeps Slurm's reason and is not "
          "resubmitted. (c) Results, fetched and "
-         "parsed from OUTCAR, vasprun.xml, CONTCAR, DOSCAR and EIGENVAL: the adsorption energy, E(slab+CO) minus E(slab) "
+         "parsed: from OUTCAR, vasprun.xml and CONTCAR, the adsorption energy, E(slab+CO) minus E(slab) "
          f"minus E(CO), {E_ADS}{NB}eV. NEB, EOS and DOS are each their own run through the same queue: NEB images "
          "interpolated between the relaxed end points relax down onto the minimum-energy path, the climbing image "
          "settling last at the saddle, with "
          f"a barrier of 0.62{NB}eV; equation-of-state energies, relative to the minimum energy, fitted with the "
          "Birch–Murnaghan equation, giving the equilibrium volume, V zero, "
          f"12.0{NB}Å³ per atom, the bulk modulus, B zero, 140{NB}GPa, and its pressure derivative, B zero prime, 5.0; "
-         "and the DOS of copper against energy relative to the Fermi energy, with no band gap. "
+         "and, parsed from DOSCAR and EIGENVAL, the DOS of copper against energy relative to the Fermi energy, with no band gap. "
          "All values are illustrative.")
 LEGEND = [("amber", "waits for your approval"), ("okc", "Slurm job completed"), ("flow", "submitted after approval"),
           ("dash", "POTCAR: stays on the cluster")]
@@ -653,8 +653,8 @@ def _narrow():
     P.append(rv(badge(16, RY, "c", "FETCHED · PARSED"), T["chead"], rec, 0, 0))
     P.append(rv(f'<path class="cv" d="M320,{f(CY + CH + 2)} V{f(RY + 6)}" marker-end="url(#arr)"/>', T["parse"], rec, 0, 0, d=.1))
     P.append(fetch_dots(320, CY + CH + 4, RY + 4, rec))
-    P.append(chips(344, RY + 10, rec, False, rows=2))
-    cue_y = RY + 10 + 32 + 24 + 20
+    P.append(chips(344, RY + 10, rec, False))
+    cue_y = RY + 10 + 24 + 20
     P.append(rv(f'<text class="lbl" x="16" y="{f(cue_y)}">NEB, EOS and DOS: own runs, same queue</text>', T["cue"], rec, 0, 0))
     y = cue_y + 16
     P.append(ads_card(16, y, 328, 116, rec, False))
@@ -689,7 +689,7 @@ JS = """MAFig.register("vasp", function (root, variant) {
   var okb = one(".f-vasp-okb"), bars = one(".f-vasp-bars");
   tl.from(okb, {opacity: 0, scale: 0, duration: .2, ease: "back.out(2.5)"}, T(okb))
     .from(bars, {x: num(bars, "data-dx"), y: num(bars, "data-dy"), duration: .35, ease: "power2.in"}, T(bars));
-  // one job per step, in order (the next enters only after this one is COMPLETED): PENDING, RUNNING (an
+  // one job per step, in order (the next enters only after this one is COMPLETED and fetched): PENDING, RUNNING (an
   // indeterminate pulse: Slurm reports no progress within a job), COMPLETED, then the tick
   q(".f-vasp-tok").forEach(function (k) {
     var t = T(k), p = pair(k, "data-p"), r = pair(k, "data-r"), run = k.querySelector(".f-vasp-run"),
@@ -708,8 +708,8 @@ JS = """MAFig.register("vasp", function (root, variant) {
     tl.set(d, {opacity: 1, y: 0}, t).to(d, {y: num(d, "data-l"), duration: __FETCH__, ease: "power1.in"}, t)
       .set(d, {opacity: 0}, t + __FETCH__);
   });
-  // (c) NEB: the images appear on the interpolated line between the relaxed end points, relax onto their
-  // energies (the climbing image last); the guide line fades as they go
+  // (c) NEB: the images appear on the interpolated guess above the path (dashed guide), relax down onto their
+  // energies (the climbing image last); the guide fades once the others have settled
   q(".f-vasp-guide").forEach(function (g) {
     tl.fromTo(g, {opacity: 0}, {opacity: 1, duration: .2}, T(g)).to(g, {opacity: 0, duration: .25}, num(g, "data-t2"));
   });

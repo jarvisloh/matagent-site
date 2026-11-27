@@ -519,7 +519,7 @@ def _narrow():
     test0 = th + 22
     chk_hdr = test0 + 18 * (len(TEST) - 1) + 38
     chk0 = chk_hdr + 26
-    run0 = chk0 + 3 * 24 + 6
+    run0 = chk0 + 3 * 24 + 9  # the contract badge (r 7, 4.5 above its baseline) clears the runner by 6.5
     by1 = run0 + 74 + 12
     P.append(f'<rect class="panel f-improvement-hous" x="12" y="{by0}" width="336" height="{by1 - by0}" rx="16" style="fill:url(#{pre}-pnl)"/>')
     P.append("".join(f'<circle class="f-improvement-dt" cx="{28 + 12 * k}" cy="{by0 + 16}" r="3.5"/>' for k in range(3)))
@@ -610,7 +610,8 @@ JS = """MAFig.register("improvement", function (root, variant) {
   intro.from(q(".hdr, .f-improvement-pl, .legend, .f-improvement-plot, .f-improvement-hous, .card:not([data-t]), .f-improvement-chip, .f-improvement-isle, .cv, " +
                ".tag:not([data-w]):not(.card .tag), .sub:not([data-t]):not(.card .sub), .lbl:not([data-t]):not([data-w])"),
              {opacity: 0, duration: .5, stagger: .01}, 0)
-    .from(q(".f-improvement-grid, .f-improvement-trk"), {drawSVG: "0%", duration: .5, stagger: .03}, .3)
+    .from(q(".f-improvement-trk"), {drawSVG: "0%", duration: .5, stagger: .03}, .3)
+    .from(q(".f-improvement-grid"), {opacity: 0, duration: .5, stagger: .03}, .3)  // dashed: drawSVG would erase the dashes
     .from(q(".f-improvement-wt, .f-improvement-mtr, .f-improvement-dt, .f-improvement-bdg, .f-improvement-run"), {opacity: 0, duration: .4, stagger: .01}, .5)
     .set(shown, {opacity: 0}, 0)
     .set(wipes, {attr: {width: 0}}, 0)

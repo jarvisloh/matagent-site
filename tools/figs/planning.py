@@ -137,7 +137,7 @@ def _row(i, step, x, y, w, h, lane, chk, wide, pre):
          f'<text class="sub" x="{f(rx)}" y="{f(l3)}" text-anchor="end">{escape(hrs)}</text>'
          f'<text class="sub" x="{f(tx)}" y="{f(l4)}">{escape(gap)}</text>'
          f'<text class="sub" x="{f(rx)}" y="{f(l4)}" text-anchor="end">p. {page}</text>'
-         '</g>' + ("" if wide else "".join(
+         '</g>' + ("" if wide or not ok else "".join(
              f'<path class="f-planning-grid" d="M{f(lane[0] + j * PER_WEEK * lane[1])},{f(lane[2] - 4)} v{f(lane[3] + 8)}"/>'
              for j in range(LANE_MAX // PER_WEEK + 1))) + '</g>'
          f'<rect class="f-planning-caret" x="{f(x)}" y="{f(y + 8)}" width="2.5" height="{f(h - 16)}" opacity="0" data-w="{f(w - 4)}"/>']
@@ -299,14 +299,15 @@ def _inputs(x, y, w, wide):
     return "".join(P), (y + h1 / 2, y2 + h2 / 2, y3 + h3 / 2, y3 + h3)
 
 
-def _lane_head(x0, u, top, bottom, axis_y, lbl_x, lbl_y, anchor, grid):
+def _lane_head(x0, u, top, bottom, axis_y, lbl_x, lbl_y, anchor, grid, skip=()):
     """Week columns (2,000 core-hours each), the core-hour axis and its label; grid=False leaves the week lines to
-    the rows (narrow)."""
+    the rows (narrow). skip: (y0, y1) bands the lines leave out, the failing rows, whose lane holds the reason."""
     P = []
     for j in range(LANE_MAX // PER_WEEK + 1):
         gx = x0 + j * PER_WEEK * u
         if grid:
-            P.append(f'<path class="f-planning-grid" d="M{f(gx)},{f(top)} V{f(bottom)}"/>')
+            ys = [top] + [v for b in sorted(skip) for v in b] + [bottom]
+            P.append(f'<path class="f-planning-grid" d="{"".join(f"M{f(gx)},{f(a)} V{f(b)}" for a, b in zip(ys[::2], ys[1::2]))}"/>')
         P.append(f'<path class="f-planning-axis" d="M{f(gx)},{f(axis_y)} v5"/>')
         if j < LANE_MAX // PER_WEEK:  # no 10,000 label: it would run into 8,000
             P.append(f'<text class="sub" x="{f(gx)}" y="{f(axis_y + 20)}" text-anchor="middle">{_n(j * PER_WEEK)}</text>')
@@ -355,7 +356,8 @@ def _wide():
              f'<path class="f-planning-arm" d="M456,{f(rules_mid)} H470"/></g>'
              f'<path class="f-planning-nib" d="M463,{f(mids[0] - 7)} L478,{f(mids[0])} L463,{f(mids[0] + 7)} Z" '
              f'data-ys="{" ".join(f(m - mids[0]) for m in mids)}"/>')
-    P.append(_lane_head(LX, u, y0 - 4, last + 6, last + 12, 1070, last + 52, "end", True))
+    fails = [(y0 + i * pitch, y0 + i * pitch + bh) for i, s in enumerate(STEPS) if s[-1] is not None]
+    P.append(_lane_head(LX, u, y0 - 4, last + 6, last + 12, 1070, last + 52, "end", True, fails))
     for i, s in enumerate(STEPS):
         y = y0 + i * pitch
         P.append(_row(i, s, BX, y, BW, bh, (LX, u, y + bh / 2 - 9, 18), (CX, y + bh / 2), True, pre))
@@ -521,10 +523,12 @@ JS = """MAFig.register("planning", function (root, variant) {
   intro.from(q(".hdr, .f-planning-note"), {opacity: 0, duration: .5}, 0)
     .from(q(".f-planning-in"), {opacity: 0, x: -10, duration: .35, stagger: .08}, .1)
     .from(q(".f-planning-pnl"), {opacity: 0, scale: .97, duration: .5}, .3)
-    .from(q(".f-planning-cv"), {drawSVG: 0, opacity: 0, duration: .4, stagger: .05}, .4)
+    .from(q(".f-planning-cv:not(.f-planning-dash)"), {drawSVG: 0, opacity: 0, duration: .4, stagger: .05}, .4)
     .from(q(".f-planning-rules, .f-planning-lane, .f-planning-rail"), {opacity: 0, duration: .4, stagger: .05}, .5)
     .from(q(".f-planning-dec, .f-planning-stamp, .f-planning-no, .f-planning-gbg, .f-planning-gl"), {opacity: 0, duration: .4}, .6)
     .from(q(".legend"), {opacity: 0, duration: .4}, .7);
+  // dashed (wide only): fades in, as drawSVG would erase the dashes
+  if (q(".f-planning-dash").length) intro.from(q(".f-planning-dash"), {opacity: 0, duration: .4}, .4);
   pass(intro, __T0I__);
   // loop: hold the finished frame, clear what the pass reveals (registered above), replay. immediateRender off: the
   // frame stays until then.

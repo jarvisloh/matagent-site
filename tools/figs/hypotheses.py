@@ -70,24 +70,25 @@ assert sorted(range(N_SEAT), key=lambda s: -BT[s][0])[:3] == sorted(range(N_SEAT
 assert ORDER[0] != max(range(N_SEAT), key=lambda s: BT[s][0])  # the critic outranks strength in the figure
 assert sum(1 for x in FATES if x[0] == "seat") == N_SEAT and len(FATES) == N_GEN * PER_GEN
 
-LABEL = ("Hypothesis machine. Before generation, paper search (up to 10 results per query), the knowledge base (up "
-         "to 8) and Materials Project (a baseline formula) are queried, and a language model screens the results into "
-         "inspirations. All seven generators run, each a language-model prompt: inspiration at quick effort; "
-         "assumption hop and analogy added at standard; and at deep, where each generator is asked twice and the "
-         "results are merged, database pattern, anomaly detection (values at least 2.5 standard deviations from the mean, by default) and trend extrapolation, "
-         "which query the database's records, and contradiction resolution, from an LCA agreement map. Candidates "
-         "pour into rule-based gates: schema, element symbols, not the baseline, answering the goal, hard "
-         "constraints, and domain checks (SMILES sanitised by RDKit, a valid IZA code, Si/Al at least 1, a "
-         "composition summing to at most 101 %). A candidate that fails a hard check is rejected; a domain check "
-         "with no identifier gives unknown, never a failure, and soft checks only lower the rank. A language model "
-         "reviews each remaining candidate against up to eight retrieved passages; supports and disproved stand only "
-         "with a verbatim quote, and a quoted disproved rejects. A critic rates flaws minor, major or fatal, giving a "
-         "score from 1 to 5; a fatal flaw rejects unless none would remain. Near-duplicates are removed, then a judge "
-         "that sees no IDs, generator or lineage compares pairs in both presentation orders: a pair is won only if "
-         "won in both, a split is a tie, and failed games are excluded. At deep effort each candidate plays its most "
-         "similar ones, up to 150 pairs, and the top three also debate. A Bradley–Terry model is fitted to the games with bootstrap intervals, and "
-         "the final order puts gate, critic score, flaws and soft checks ahead of strength. The candidates, games, "
-         "scores and strengths are illustrative.")
+LABEL = ("Hypothesis machine. Before generation, MatAgent queries paper search (up to 10 results per query), the "
+         "knowledge base (up to 8) and Materials Project (a baseline formula). A language model screens the results "
+         "into inspirations. All seven generators run, and each is a language-model prompt. Quick effort uses "
+         "inspiration. Standard adds assumption hop and analogy. Deep adds four more, and asks each generator twice "
+         "and merges the results. Database pattern, anomaly detection and trend extrapolation query the database's "
+         "records; anomalies are values at least 2.5 standard deviations from the mean, by default. Contradiction "
+         "resolution uses an LCA agreement map. Candidates then pass rule-based gates: schema, element symbols, not "
+         "the baseline, answering the goal, hard constraints and domain checks. Domain checks include SMILES "
+         "sanitised by RDKit, a valid IZA code, Si/Al at least 1, and a composition summing to at most 101 %. A "
+         "candidate that fails a hard check is rejected. A domain check with no identifier gives unknown, never a "
+         "failure. Soft checks only lower the rank. A language model reviews each remaining candidate against up to "
+         "eight retrieved passages. Supports and disproved stand only with a verbatim quote, and a quoted disproved "
+         "rejects. A critic rates flaws minor, major or fatal and gives a score from 1 to 5. A fatal flaw rejects, "
+         "unless none would remain. Near-duplicates are removed. A judge that sees no IDs, generator or lineage then "
+         "compares pairs in both presentation orders. A pair is won only if won in both; a split is a tie; failed "
+         "games are excluded. At deep effort each candidate plays its most similar ones, up to 150 pairs, and the "
+         "top three also debate. A Bradley–Terry model is fitted to the games, with bootstrap intervals. The final "
+         "order puts gate, critic score, flaws and soft checks ahead of strength. The candidates, games, scores and "
+         "strengths are illustrative.")
 LEGEND = [("dot", "candidate"), ("adot", "rejected"), ("cell", "not paired"), ("dash", "game failed: excluded")]
 
 # ---------------------------------------------------------------- timing (s from the start of a pass; both variants)
@@ -743,11 +744,14 @@ JS = """MAFig.register("hypotheses", function (root, variant) {
       tl.fromTo(el, {x: 0}, {x: +el.getAttribute("data-dx"), duration: .4, ease: "power2.inOut"}, t0 + __SWAP__)
         .to(el, {x: 0, duration: .4, ease: "power2.inOut"}, t0 + __BACK__);
     });
-    // leaderboard: rows appear in seat order, bars grow, then the rows settle into the final order
+    // leaderboard: rows appear in seat order, bars grow, then the rows that change place cross-fade into the final
+    // order (sliding, they would pass through each other)
     rows.forEach(function (el) {
       var dy = +el.getAttribute("data-dy");
-      tl.fromTo(el, {y: dy, opacity: 0}, {y: dy, opacity: 1, duration: .3}, t0 + at(el))
-        .fromTo(el, {y: dy}, {y: 0, duration: .6, ease: "power2.inOut"}, t0 + __SORT__);
+      tl.fromTo(el, {y: dy, opacity: 0}, {y: dy, opacity: 1, duration: .3}, t0 + at(el));
+      if (dy) tl.to(el, {opacity: 0, duration: .2}, t0 + __SORT__)
+        .fromTo(el, {y: 6}, {y: 0, duration: .4, ease: "power2.out"}, t0 + __SORT__ + .2)
+        .to(el, {opacity: 1, duration: .3}, t0 + __SORT__ + .2);
     });
     bars.forEach(function (el) { tl.fromTo(el, {scaleX: 0}, {scaleX: 1, duration: .6, ease: "power3.out"}, t0 + at(el)); });
   }

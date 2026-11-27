@@ -141,9 +141,7 @@ class SiteTests(unittest.TestCase):
 
     def test_reduced_motion(self):
         m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
-        self.assertTrue(m)
-        self.assertIn(".particle", m.group(1))
-        self.assertIn("display: none", m.group(1))
+        self.assertTrue(m)  # GSAP figures skip their timelines in JS; CSS only stills transitions
 
     def test_svgs_accessible(self):
         for tag in re.findall(r"<svg\b[^>]*>", PAGE):
@@ -192,39 +190,28 @@ class SiteTests(unittest.TestCase):
         self.assertIn("Materials Research Agent", h)
         self.assertIn("MatAgent", re.sub(r"Materials Research Agent", "", h))
 
-    def test_edges_have_pathlength(self):
-        for svg in re.findall(r"<svg\b[^>]*class=\"[^\"]*\bsch\b.*?</svg>", PAGE, flags=re.S):
-            for tag in re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bedge\b[^>]*>", svg):
-                self.assertIn('pathLength="1"', tag)
 
-    def test_hidden_state_gated_by_js(self):
-        self.assertIn('classList.add("js")', PAGE)
-        for sel, body in re.findall(r"([^{}]+)\{([^}]*)\}", re.sub(r"/\*.*?\*/", "", css(), flags=re.S)):
-            if re.search(r"opacity:\s*0\b|stroke-dashoffset:\s*1\b", body):
-                self.assertTrue(all(x.strip().startswith(".js ") for x in sel.split(",")), sel)
 
-    def test_reduced_motion_covers_dashed_connectors(self):
-        m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
-        self.assertIn(".sch .dash", m.group(1))
 
-    def test_reduced_motion_hides_highlights(self):
-        # glow windows that start at t = 0 would leave a node lit in the static frame
-        m = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", css(), flags=re.S)
-        self.assertRegex(m.group(1), r"\.sch \.hl\s*\{[^}]*visibility:\s*hidden")
 
-    def test_dash_not_edge(self):
-        # dashed connectors never take pathLength (it rescales the dash) and never share the edge draw-in
-        tags = re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bdash\b[^>]*>", PAGE)
-        self.assertTrue(tags)  # the remaining SMIL figures still use dashed connectors
-        self.assertNotRegex(PAGE, r'class="[^"]*\bedge (opt|rej)\b')
-        for tag in tags:
-            self.assertNotRegex(tag, r'class="[^"]*\bedge\b')
-            self.assertNotIn("pathLength", tag)
 
     def test_fig_breakpoint(self):
         m = re.search(r"@media \(max-width: ([\d.]+px)\) \{[^{}]*\.fig \.wide \{ display: none; \}", css())
         self.assertTrue(m)
         self.assertIn(m.group(1), ("1000px", "999.98px"))
+
+    def test_no_smil(self):
+        self.assertIsNone(re.search(r"<animate(Motion|Transform)?\b|<set\b|<mpath\b", PAGE))
+
+    def test_all_figs_gsap(self):
+        figs = re.findall(r'<figure class="fig"[^>]*>', PAGE)
+        self.assertEqual(len(figs), 12)
+        for tag in figs:
+            self.assertIn('data-engine="gsap"', tag)
+        self.assertFalse("IntersectionObserver" in PAGE or ":not([data-engine" in PAGE)  # old SMIL controller gone
+
+    def test_page_size(self):
+        self.assertLessEqual(len(PAGE.encode()), 1_000_000)
 
     def test_sections_in_order(self):
         ids = re.findall(r'<section[^>]*\bid="([^"]+)"', PAGE)
@@ -407,12 +394,6 @@ class SiteTests(unittest.TestCase):
                 if known is not None:
                     self.assertIn(known.get(cid), ("confirmed", "changed", "assumed"), cid)
 
-    def test_idx_full_opacity(self):
-        # .idx is muted text; any opacity below 1 drops it under 4.5:1
-        m = re.search(r"\.sch \.idx\s*\{([^}]*)\}", css())
-        self.assertTrue(m)
-        op = re.search(r"opacity:\s*([\d.]+)", m.group(1))
-        self.assertTrue(op is None or float(op.group(1)) >= 1, m.group(1))
 
     def test_sublabel_length(self):
         import html
@@ -420,15 +401,6 @@ class SiteTests(unittest.TestCase):
             for t in re.findall(r'<text class="sub[ "][^>]*>(.*?)</text>', svg, flags=re.S):  # multi-class subs too
                 self.assertLessEqual(len(html.unescape(re.sub(r"<[^>]+>", "", t))), 22, t)
 
-    def test_reveal_viewport_based(self):
-        # a figure taller than the viewport can never reach a figure-fraction threshold
-        script = re.findall(r"<script>(.*?)</script>", PAGE, flags=re.S)[-1]
-        opts = re.search(r"new IntersectionObserver\(.*\},\s*(\{[^}]*\})\s*\)", script, flags=re.S)
-        self.assertTrue(opts)
-        th = re.search(r"threshold:\s*([\d.]+)", opts.group(1))
-        self.assertTrue(th is None or float(th.group(1)) == 0, opts.group(1))
-        self.assertRegex(opts.group(1), r'rootMargin:\s*"0px 0px -\d+% 0px"')
-        self.assertEqual(script.count("new IntersectionObserver"), 1)
 
     def test_narrow_fig_cap(self):
         m = re.search(r"\.fig \.narrow \{ display: block; max-width: (\d+)px", css())

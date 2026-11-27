@@ -7,7 +7,8 @@ from html import escape
 
 from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
-T_LOOP = 10.4
+T_LOOP = 10.4  # one replay; the loop period adds HOLD + .4 before it
+HOLD = 1.6  # loop: the finished frame stays this long before the replay clears it
 LENS_S = 1.8  # lens magnification
 # loop times (s) of each evidence flow; each flow overlay carries its time as data-t
 FT = {"merge": 0, "text": .3, "images": 1.0, "thumbs": 1.6, "chunks": 1.9, "chart": 4.4, "reading": 4.9,
@@ -285,8 +286,8 @@ def _wide():
     P.append('<text class="sub f-literature-note" x="30" y="600">graph neural network</text>')
     pts = [(96, 668), (284, 640), (470, 690), (650, 630)]
     bg = [(52, 628), (156, 610), (196, 712), (352, 708), (386, 612), (560, 616), (566, 722), (730, 706), (744, 604)]
-    edges = [(0, 4), (0, 5), (0, 6), (1, 5), (1, 8), (2, 7), (2, 9), (2, 10), (3, 9), (3, 11), (3, 12), (5, 8),
-             (6, 7), (10, 11)]
+    # no background edge crosses a node or relation label
+    edges = [(0, 4), (0, 5), (0, 6), (1, 5), (1, 8), (2, 7), (2, 10), (3, 9), (3, 12), (6, 7), (10, 11)]
     P.append(_graph(pts, bg, edges,
                     lbl_pos=[(96, 700, "middle"), (284, 618, "middle"), (470, 722, "middle"), (650, 668, "middle")],
                     rel_pos=[(190, 636, "middle"), (390, 652, "start"), (530, 646, "middle")]))
@@ -359,7 +360,7 @@ def _narrow():
     g = y2 + 40
     pts = [(64, g + 34), (296, g + 84), (64, g + 160), (296, g + 212)]
     bg = [(24, g + 100), (150, g + 16), (190, g + 92), (330, g + 140), (176, g + 238), (40, g + 232), (330, g + 24)]
-    edges = [(0, 4), (0, 5), (1, 10), (1, 7), (1, 6), (2, 4), (3, 7), (5, 6), (8, 9), (5, 10)]
+    edges = [(0, 4), (0, 5), (1, 7), (1, 6), (2, 4), (3, 7), (5, 6), (8, 9), (5, 10)]  # none crosses a label
     P.append(_graph(pts, bg, edges,
                     lbl_pos=[(64, g + 12, "middle"), (344, g + 60, "end"), (64, g + 190, "middle"), (330, g + 242, "end")],
                     rel_pos=[(196, g + 48, "start"), (162, g + 117, "end"), (196, g + 176, "start")]))
@@ -398,7 +399,7 @@ JS = """MAFig.register("literature", function (root, variant) {
   intro.from(q(".hdr"), {opacity: 0, duration: .5}, 0)
     .from(q(".f-literature-q"), wide ? {opacity: 0, x: -20, duration: .5} : {opacity: 0, y: -12, duration: .5}, .1)
     .from(q(".f-literature-q2, .f-literature-merge"), {drawSVG: 0, opacity: 0, duration: .4, stagger: .05}, .4)
-    .from(q(".f-literature-src"), {opacity: 0, y: -8, duration: .35, stagger: .08}, .45)
+    .from(q(".f-literature-src"), {opacity: 0, x: -8, duration: .35, stagger: .08}, .45)  // stacked: a vertical slide would overlap
     .from(q(".f-literature-front"), {opacity: 0, duration: .4}, .7);
   // the back pages fan out from behind the front page
   q(".f-literature-page").forEach(function (p) {
@@ -433,17 +434,24 @@ JS = """MAFig.register("literature", function (root, variant) {
   // loop: the beam sweeps the front page, the bars regrow best first, the lens glides along the chart, a walker hops
   // the graph path, the evidence flows to the docks and the answer writes in again. Every key in a fromTo start object
   // is repeated in its end object (a loop wrap drops start-only keys). immediateRender off: the finished frame stays.
-  var loop = gsap.timeline({repeat: -1, defaults: {immediateRender: false}});
-  loop.fromTo(scan, {y: -rg[0], opacity: 1}, {y: rg[1], opacity: 1, duration: 1.8, ease: "none"}, 0)
+  // the replay runs after a hold on the finished frame and a clear of what it reveals again (bars, hops, docks,
+  // reading, answer), so no result is on show before the replay reaches it
+  var loop = gsap.timeline({repeat: -1, defaults: {immediateRender: false}}), rp = gsap.timeline({defaults: {immediateRender: false}});
+  loop.to(wipe, {attr: {width: 0}, duration: .3}, %(HOLD)s)
+    .to(hops, {drawSVG: "0%%", duration: .3}, %(HOLD)s)
+    .to(bars, {scaleX: 0, duration: .3}, %(HOLD)s)
+    .to(q(".f-literature-dock"), {opacity: .4, duration: .3}, %(HOLD)s)
+    .to(q(".f-literature-rd"), {opacity: .2, duration: .3}, %(HOLD)s);
+  rp.fromTo(scan, {y: -rg[0], opacity: 1}, {y: rg[1], opacity: 1, duration: 1.8, ease: "none"}, 0)
     .fromTo(scan, {y: -rg[0], opacity: 0}, {y: 0, opacity: 1, duration: .7, ease: "power2.out"}, 1.85)
     .fromTo(bars, {scaleX: 0}, {scaleX: 1, duration: .6, stagger: .08, ease: "power2.out"}, .7);
   q(".f-literature-flow").forEach(function (el) {
     var t = +el.getAttribute("data-t");
-    loop.fromTo(el, {drawSVG: "0%% 14%%", opacity: 1}, {drawSVG: "86%% 100%%", opacity: 1, duration: .6, ease: "power1.in"}, t)
+    rp.fromTo(el, {drawSVG: "0%% 14%%", opacity: 1}, {drawSVG: "86%% 100%%", opacity: 1, duration: .6, ease: "power1.in"}, t)
       .to(el, {opacity: 0, duration: .15}, t + .6);
   });
   // the lens glides out along the chart and back (no jump at the loop wrap); the magnified copy counter-moves
-  loop.to(lens, {x: -travel, duration: 1.1, ease: "sine.inOut"}, 2.2)
+  rp.to(lens, {x: -travel, duration: 1.1, ease: "sine.inOut"}, 2.2)
     .to(lens, {x: 0, duration: 1.1, ease: "sine.inOut"}, 3.3)
     .to(mag, {x: travel * S, duration: 1.1, ease: "sine.inOut"}, 2.2)
     .to(mag, {x: 0, duration: 1.1, ease: "sine.inOut"}, 3.3)
@@ -451,17 +459,18 @@ JS = """MAFig.register("literature", function (root, variant) {
     .fromTo(walker, {x: 0, y: 0, opacity: 0}, {x: 0, y: 0, opacity: 1, duration: .2}, 4.85);
   for (var i = 1; i < xy.length; i++) {
     var t = 5.0 + (i - 1) * .7, dx0 = xy[i - 1][0] - xy[0][0], dy0 = xy[i - 1][1] - xy[0][1];
-    loop.fromTo(walker, {x: dx0, y: dy0, opacity: 1}, {x: xy[i][0] - xy[0][0], y: xy[i][1] - xy[0][1], opacity: 1,
+    rp.fromTo(walker, {x: dx0, y: dy0, opacity: 1}, {x: xy[i][0] - xy[0][0], y: xy[i][1] - xy[0][1], opacity: 1,
         duration: .6, ease: "power1.inOut"}, t)
       .fromTo(hops[i - 1], {drawSVG: "0%%"}, {drawSVG: "100%%", duration: .6, ease: "power1.inOut"}, t)
       .fromTo(hopg[i], {scale: 1}, {scale: 1.3, transformOrigin: "50%% 50%%", duration: .15, yoyo: true, repeat: 1}, t + .6);
   }
-  loop.to(walker, {opacity: 0, duration: .25}, 7.2)
+  rp.to(walker, {opacity: 0, duration: .25}, 7.2)
     .fromTo(q(".f-literature-dock"), {opacity: .4}, {opacity: 1, duration: .3, stagger: .15}, 7.5)
     .fromTo(wipe, {attr: {width: 0}}, {attr: {width: AW}, duration: 1.1, ease: "power1.inOut"}, 8.3)
     .set({}, {}, %(TL)s);
+  loop.add(rp, %(HOLD)s + .4).set({}, {}, %(HOLD)s + .4 + %(TL)s);
   return {intro: intro, loop: loop};
-});""" % {"TL": T_LOOP}
+});""" % {"TL": T_LOOP, "HOLD": HOLD}
 
 # every loop event ends inside the loop period (answer wipe 8.3 + 1.1; last flow + .75)
 assert 8.3 + 1.1 <= T_LOOP and max(FT.values()) + .75 <= T_LOOP

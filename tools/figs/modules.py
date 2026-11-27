@@ -1,6 +1,6 @@
 """Modules figure: the five core modules as a zigzag honeycomb ribbon (wide) or a stacked hex column (narrow), flanked
 by two dashed context cells, shared memory and a staged agent mode. Each cell has a callout card on a leader line;
-each core hex holds a glyph of what its module does (claims C01-C03, C08, C21, C29, C41, C43-C48, C51). Wide is
+each core hex holds a glyph of what its module does (claims C01-C03, C08, C21, C29, C41, C43-C48, C51, C72). Wide is
 scrubbed: each hex lights, lit neighbours' seams glow and the callouts write in as the reader scrolls. The SVG is the
 finished frame."""
 import math
