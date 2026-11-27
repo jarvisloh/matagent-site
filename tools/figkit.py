@@ -75,11 +75,19 @@ def hdr(x, y, text, anchor="start"):
     return f'<text class="hdr" x="{f(x)}" y="{f(y)}"{a}>{escape(text)}</text>'
 
 
+def flathex(cx, cy, r):
+    """Flat-top hexagon path centred on (cx, cy) with circumradius r."""
+    pts = [(cx + r * math.cos(math.radians(60 * k)), cy + r * math.sin(math.radians(60 * k))) for k in range(6)]
+    return "M" + " L".join(f"{f(x)},{f(y)}" for x, y in pts) + " Z"
+
+
 _SWATCH = {
     "flow": lambda x: f'<path d="M{x},-4 h22" class="lg-flow"/>',
     "amber": lambda x: f'<path d="M{x},-4 h22" class="lg-amber"/>',
     "dot": lambda x: f'<circle cx="{x + 4}" cy="-4" r="4" class="lg-dot"/>',
     "dash": lambda x: f'<path d="M{x},-4 h22" class="lg-dash"/>',
+    "hex": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hex"/>',
+    "hexdash": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hexdash"/>',
 }
 
 

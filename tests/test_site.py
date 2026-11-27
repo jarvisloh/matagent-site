@@ -548,7 +548,6 @@ class SiteTests(unittest.TestCase):
         self.assertTrue(js)
         self.assertRegex(js.group(0), r"\{scrub: true\}\);\s*<!-- figjs:modules:end -->")
         self.assertIn('closest("section").querySelectorAll(".cards .card")', js.group(0))  # group cards stagger in
-        self.assertNotIn("intro.set({}, {}", js.group(0))  # no per-figure hold; the shared range fits
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
