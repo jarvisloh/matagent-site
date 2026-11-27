@@ -33,7 +33,7 @@ HARD_TXT, SOFT_TXT = "a fail rejects the hypothesis", "a fail lowers its rank"
 CW = {"wide": 7.68, "narrow": 8.04}  # Geist Mono advance per character at the sub size
 HW = {"wide": 9.73, "narrow": 10.18}  # header advance (0.6 em + .16 em letter-spacing)
 TAGW = {"wide": 9.22, "narrow": 9.65}  # tag advance (0.6 em + .12 em letter-spacing)
-TTLW = 7.9  # conservative Geist 600 13.5 px advance (ttl.sm)
+TTL_EM = 0.58  # conservative Geist 600 advance per em; titles: 14.5 px (tile fronts), 13.5 px (ttl.sm, key rows)
 
 # --- timing (s). A pass: ripple out (tiles turn to their checks, pips light), hold, ripple back (fronts again) ---------
 WAVE_S = .8  # seconds per lattice pitch
@@ -82,12 +82,16 @@ def _tile(i, cx, cy, R, dt, v):
     cw, hw = CW[v], HW[v]
     hx = _hex(cx, cy, R)
     # front: index, icon, name
-    _fits(R, -59, -47, 2 * cw)
-    _fits(R, -34, 22, len(name) * 8.4)
+    _fits(R, -65, -53, 2 * cw)
+    _fits(R, 6, 24, len(name) * 14.5 * TTL_EM)
+    _fits(R, 34, 50, 3 * 14 + 2 * 7)
+    # a faint motif: the domain's icon repeated small under its name
+    motif = "".join(f'<use class="ic f-domains-motif" href="#i-dm-{ic}" x="{f(cx - 28 + 21 * k)}" y="{f(cy + 34)}" width="14" height="14"/>'
+                    for k in range(3))
     front = (f'<g class="f-domains-face f-domains-front"><path class="f-domains-fx" d="{hx}"/>'
-             f'<text class="sub f-domains-ix" x="{f(cx)}" y="{f(cy - 50)}" text-anchor="middle">{idx}</text>'
-             f'<use class="ic f-domains-ic" href="#i-dm-{ic}" x="{f(cx - 16)}" y="{f(cy - 40)}" width="32" height="32"/>'
-             f'<text class="ttl" x="{f(cx)}" y="{f(cy + 18)}" text-anchor="middle">{escape(name)}</text></g>')
+             f'<text class="sub f-domains-ix" x="{f(cx)}" y="{f(cy - 56)}" text-anchor="middle">{idx}</text>'
+             f'<use class="ic f-domains-ic" href="#i-dm-{ic}" x="{f(cx - 20)}" y="{f(cy - 46)}" width="40" height="40"/>'
+             f'<text class="ttl" x="{f(cx)}" y="{f(cy + 20)}" text-anchor="middle">{escape(name)}</text>{motif}</g>')
     # back: index, name, then its checks (glyph + text) as a left-aligned block centred in the hex
     _fits(R, -32, -18, len(name) * hw)
     texts = [CHECKS[c][1] for c in checks]
@@ -99,7 +103,7 @@ def _tile(i, cx, cy, R, dt, v):
                     f'<text class="sub f-domains-ck" x="{f(bx + 13)}" y="{f(y)}">{escape(CHECKS[c][1])}</text>'
                     for c, y in zip(checks, ys))
     back = (f'<g class="f-domains-face f-domains-back"><path class="f-domains-bx" d="{hx}"/>'
-            f'<text class="sub f-domains-ix" x="{f(cx)}" y="{f(cy - 50)}" text-anchor="middle">{idx}</text>'
+            f'<text class="sub f-domains-ix" x="{f(cx)}" y="{f(cy - 56)}" text-anchor="middle">{idx}</text>'
             f'<text class="hdr f-domains-bn" x="{f(cx)}" y="{f(cy - 20)}" text-anchor="middle">{escape(name.upper())}</text>'
             f'<path class="f-domains-rule" d="M{f(cx - 24)},{f(cy - 9)} h48"/>{lines}</g>')
     return (f'<g class="f-domains-tile" tabindex="0" role="img" aria-label="{escape(_tile_label(name, checks))}" '
@@ -110,12 +114,14 @@ def _tile(i, cx, cy, R, dt, v):
 
 
 def _panel(pre, cx, cy, R, v):
-    _fits(R, -32, -20, 14 * HW[v])
+    _fits(R, -38, -26, 14 * HW[v])
+    _fits(R, 30, 44, 11 * CW[v])
     return (f'<g class="f-domains-pnl"><path class="panel" d="{_hex(cx, cy, R)}" style="fill:url(#{pre}-pnl)"/>'
             f'<path class="f-domains-core" d="{_hex(cx, cy, R - 7)}"/>'
-            f'<text class="hdr f-domains-pm" x="{f(cx)}" y="{f(cy - 20)}" text-anchor="middle">DOMAIN PROFILE</text>'
-            f'<text class="sub f-domains-pi" x="{f(cx)}" y="{f(cy + 6)}" text-anchor="middle">&quot;checks&quot;: […]</text>'
-            f'<text class="sub f-domains-pm" x="{f(cx)}" y="{f(cy + 28)}" text-anchor="middle">one per domain</text>'
+            f'<text class="hdr f-domains-pm" x="{f(cx)}" y="{f(cy - 26)}" text-anchor="middle">DOMAIN PROFILE</text>'
+            f'<text class="sub f-domains-pi" x="{f(cx)}" y="{f(cy - 2)}" text-anchor="middle">&quot;checks&quot;: […]</text>'
+            f'<text class="sub f-domains-pm" x="{f(cx)}" y="{f(cy + 20)}" text-anchor="middle">one profile</text>'
+            f'<text class="sub f-domains-pm" x="{f(cx)}" y="{f(cy + 40)}" text-anchor="middle">per domain</text>'
             f'<path class="f-domains-pp" d="{_hex(cx, cy, R + 3.5)}" opacity="0"/></g>')
 
 
@@ -141,9 +147,9 @@ def _lattice(pre, rows, panel_at, cx, y0, R, g, v):
     waves = "".join(f'<circle class="f-domains-wave" cx="{f(pc[0])}" cy="{f(pc[1])}" r="{f(r0)}" opacity="0" '
                     f'mask="url(#{pre}-seam)" data-t="{_tv(t)}" data-r0="{f(r0)}" data-r1="{f(r1)}" '
                     f'data-d="{_tv((r1 - r0) / speed)}"/>' for t in (0, back))
-    body = (mask + _panel(pre, pc[0], pc[1], R, v) + "".join(_tile(i, x, y, R, dts[i], v) for i, (x, y) in enumerate(tiles))
-            + waves)
-    return body, y0 + (len(rows) - 1) * vp + R
+    # waves are masked to the seams, so they may sit under the tiles; tiles come last so nothing overlays them
+    return mask + _panel(pre, pc[0], pc[1], R, v) + waves, "".join(_tile(i, x, y, R, dts[i], v) for i, (x, y) in enumerate(tiles)), \
+        y0 + (len(rows) - 1) * vp + R
 
 
 def _key(x0, y, w, v):
@@ -161,7 +167,7 @@ def _key(x0, y, w, v):
                 continue
             n = len(users[c])
             px0 = x0 + w - 12 - 10.4 - 25 * (n - 1)  # leftmost pip centre
-            assert x0 + 30 + len(name) * TTLW + 8 <= px0 - 10.4, name
+            assert x0 + 30 + len(name) * 13.5 * TTL_EM + 6 <= px0 - 10.4, name
             assert len(sub) <= 22 and x0 + 30 + len(sub) * cw <= x0 + w - 8, sub
             pips = "".join(f'<g class="f-domains-pip" data-i="{i + 1:02d}"><path class="f-domains-pb" d="{_hex(px0 + 25 * j, y + 17, 12)}"/>'
                            f'<path class="f-domains-lit" d="{_hex(px0 + 25 * j, y + 17, 12)}"/>'
@@ -173,7 +179,7 @@ def _key(x0, y, w, v):
                      f'<text class="sub" x="{f(x0 + 30)}" y="{f(y + 45)}">{escape(sub)}</text>{pips}</g>')
             y += 62
         y += 24
-    P.append(f'<text class="lbl" x="{f(x0)}" y="{f(y + 2)}">pips: the domains whose profile names it</text>'
+    P.append(f'<text class="lbl" x="{f(x0)}" y="{f(y + 2)}">pips: domains whose profile lists the check</text>'
              f'<text class="lbl" x="{f(x0)}" y="{f(y + 24)}">RDKit or pymatgen not installed → unknown</text>')
     return "".join(P), y + 28
 
@@ -198,39 +204,40 @@ LABEL = ("Ten material domains as a honeycomb of tiles around the domain profile
 assert _USES["iza"] == _USES["sial"] == "zeolite"
 
 
-def _svg(w, h, body, variant):
-    # a group, not an img: the tiles are keyboard-focusable and must stay in the accessibility tree
-    return svg(w, h, body, variant, LABEL, role="group", attrs='data-fig-tiles="1"')
+def _svg(w, h, hidden, tiles, variant):
+    # a group, not an img: the tiles are keyboard-focusable and must stay in the accessibility tree. Everything else
+    # repeats the group label, so it is hidden from assistive technology.
+    return svg(w, h, f'<g aria-hidden="true">{hidden}</g>{tiles}', variant, LABEL, role="group", attrs='data-fig-tiles="1"')
 
 
 def _wide():
     W, R, g, pre = 1100, 96, 10, "dom-w"
     lat_w = 3 * (SQ3 * R + g) + SQ3 * R
     cx = 30 + lat_w / 2
-    lat, bot = _lattice(pre, [4, 3, 4], (1, 1), cx, 54 + R, R, g, "wide")
+    lat, tiles, bot = _lattice(pre, [4, 3, 4], (1, 1), cx, 54 + R, R, g, "wide")
     kx = 30 + lat_w + 36
     key, kbot = _key(kx, 30, W - 28 - kx, "wide")
     assert kbot <= bot
     H = round(bot + 62)
     P = [_defs(pre), hdr(30, 30, "TEN DOMAIN PROFILES"), lat, key, legend(LEGEND, 30, H - 20)]
-    return _svg(W, H, "".join(P), "wide")
+    return _svg(W, H, "".join(P), tiles, "wide")
 
 
 def _narrow():
     W, R, g, pre = 360, 98, 10, "dom-n"
-    lat, bot = _lattice(pre, [2, 1, 2, 1, 2, 1, 2], (3, 0), W / 2, 46 + R, R, g, "narrow")
+    lat, tiles, bot = _lattice(pre, [2, 1, 2, 1, 2, 1, 2], (3, 0), W / 2, 46 + R, R, g, "narrow")
     assert W / 2 + (SQ3 * R + g) / 2 + SQ3 * R / 2 + 4 <= W  # outer tiles and their focus ring stay inside
     key, kbot = _key(12, bot + 40, W - 24, "narrow")
     P = [_defs(pre), hdr(12, 24, "TEN DOMAIN PROFILES"), lat, key,
          "".join(legend([it], 12, kbot + 30 + 26 * k) for k, it in enumerate(LEGEND))]
-    return _svg(W, round(kbot + 30 + 26 * 3 + 12), "".join(P), "narrow")
+    return _svg(W, round(kbot + 30 + 26 * 3 + 12), "".join(P), tiles, "narrow")
 
 
 JS = """MAFig.register("domains", function (root, variant) {
   var q = function (s) { return gsap.utils.toArray(root.querySelectorAll(s)); };
   var tiles = q(".f-domains-tile"), waves = q(".f-domains-wave"), pp = root.querySelector(".f-domains-pp");
   var back = +waves[1].getAttribute("data-t"), last = Math.max.apply(null, tiles.map(function (t) { return +t.getAttribute("data-t"); }));
-  gsap.set(q(".f-domains-lit"), {transformOrigin: "50% 50%"});
+  gsap.set(q(".f-domains-lit, .f-domains-pn"), {transformOrigin: "50% 50%"});
   // everything a pass reveals by opacity is registered here, and the loop clears exactly this list
   var shown = [], reg = function (x) { shown = shown.concat(x); return x; };
   // one pass from t0: a ripple leaves the profile; each tile turns over (CSS flip on data-flip) as the wave front
@@ -249,7 +256,7 @@ JS = """MAFig.register("domains", function (root, variant) {
         tl.fromTo(ping, {opacity: 0}, {opacity: 1, duration: .1}, tf - .1)
           .to(ping, {opacity: 0, duration: .45}, tf + .05)
           .set(tile, {attr: {"data-flip": k ? 0 : 1}}, tf);
-        if (!k) tl.fromTo(reg(q('.f-domains-pip[data-i="' + tile.getAttribute("data-i") + '"] .f-domains-lit')),
+        if (!k) tl.fromTo(reg(q('.f-domains-pip[data-i="' + tile.getAttribute("data-i") + '"] .f-domains-lit, .f-domains-pip[data-i="' + tile.getAttribute("data-i") + '"] .f-domains-pn')),
           {opacity: 0, scale: .3}, {opacity: 1, scale: 1, duration: .3, ease: "back.out(2.2)", stagger: .06}, tf + __PIP__);
       });
     });

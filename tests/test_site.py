@@ -153,6 +153,12 @@ class SiteTests(unittest.TestCase):
             self.assertIn('role="group"' if 'data-fig-tiles="1"' in tag else 'role="img"', tag)
             m = re.search(r'aria-label="([^"]*)"', tag)
             self.assertTrue(m and len(m.group(1)) >= 20, tag)
+        # the group exemption: only tabindex="0" tiles are exposed; all other content sits in one aria-hidden group
+        groups = re.findall(r'<svg\b[^>]*role="group"[^>]*>(.*?)</svg>', PAGE, flags=re.S)
+        for body in groups:
+            m = re.fullmatch(r'<g aria-hidden="true">.*?</g>((?:<g [^>]*tabindex="0"[^>]*>.*?<!--/tile-->)+)', body, flags=re.S)
+            self.assertTrue(m, body[:120])
+            self.assertNotIn('aria-hidden', m.group(1))
 
     def test_figs_have_narrow(self):
         for fig in re.findall(r'<figure class="fig".*?</figure>', PAGE, flags=re.S):
