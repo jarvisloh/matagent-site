@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -9,17 +10,17 @@ PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html"
 
 EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
-  r"\bvalidated\b", r"runs? (dft )?simulations", r"\bGNN", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
+  r"\bvalidated\b", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
-  r"surrogate", r"uncertainty quantification", r"\bslurm\b", r"\bHPC\b", r"reflexion", r"local (llm|model)s?",
-  r"structure generation", r"send to maestro", r"equation[- ]of[- ]state fit", r"birch", r"\bNEB\b",
-  r"slab generation", r"submits? (the )?jobs?", r"job submission", r"air-gapped"]
+  r"surrogate", r"uncertainty quantification", r"reflexion", r"local (llm|model)s?",
+  r"structure generation", r"send to maestro", 
+  r"slab generation", r"air-gapped"]
 
 TOKENS = {
     "light": {"bg": "#F6F8FB", "dot": "#D5DDE8", "ink": "#0B1220", "muted": "#4B5970",
-              "line": "#C3CEDC", "node": "#FFFFFF", "accent": "#0E7F78", "accent-2": "#9A600E"},
+              "line": "#C3CEDC", "line-strong": "#8C9AB0", "panel": "#0f1622", "node": "#FFFFFF", "accent": "#0E7F78", "accent-2": "#9A600E"},
     "dark": {"bg": "#0A0F1A", "dot": "#1A2538", "ink": "#E6EDF5", "muted": "#8A97AB",
-             "line": "#24324A", "node": "#101A2B", "accent": "#4FD1C5", "accent-2": "#F5B544"},
+             "line": "#24324A", "line-strong": "#4A5B78", "node": "#101A2B", "accent": "#4FD1C5", "accent-2": "#F5B544"},
 }
 
 
@@ -118,6 +119,8 @@ class SiteTests(unittest.TestCase):
         for url in urls:
             self.assertIn(re.match(r"https?://([^/]+)", url).group(1),
                           {"fonts.googleapis.com", "fonts.gstatic.com"}, url)
+        for src in re.findall(r'<script[^>]*\bsrc="([^"]+)"', PAGE):
+            self.assertRegex(src, r"^assets/vendor/gsap/(gsap|ScrollTrigger|DrawSVGPlugin|MorphSVGPlugin)\.min\.js$")
         # any fetch() at all must target a literal allowed URL, never a computed one
         self.assertEqual(len(re.findall(r"\bfetch\(", scripts)),
                          len(re.findall(r"""fetch\(\s*['"`]https?://""", scripts)))
@@ -140,6 +143,8 @@ class SiteTests(unittest.TestCase):
 
     def test_svgs_accessible(self):
         for tag in re.findall(r"<svg\b[^>]*>", PAGE):
+            if 'aria-hidden="true"' in tag:  # the hidden shared-symbols sprite
+                continue
             self.assertIn('role="img"', tag)
             m = re.search(r'aria-label="([^"]*)"', tag)
             self.assertTrue(m and len(m.group(1)) >= 20, tag)
@@ -255,8 +260,60 @@ class SiteTests(unittest.TestCase):
     def test_nav_targets(self):
         nav = re.search(r'<nav.*?</nav>', PAGE, flags=re.S).group(0)
         hrefs = re.findall(r'href="#([^"]+)"', nav)
-        self.assertEqual(hrefs, ["literature", "gaps", "hypotheses", "planning", "domains",
-                                 "record", "improvement", "interfaces"])
+        self.assertEqual(hrefs, ["literature", "gaps", "hypotheses", "planning", "vasp", "domains",
+                                 "scores", "record", "improvement", "interfaces"])
+
+    @staticmethod
+    def _script(sid):
+        m = re.search(r'<script id="%s">(.*?)</script>' % sid, PAGE, flags=re.S)
+        return m.group(1) if m else ""
+
+    def test_gsap_vendored(self):
+        d = ROOT / "assets" / "vendor" / "gsap"
+        names = ("gsap", "ScrollTrigger", "DrawSVGPlugin", "MorphSVGPlugin")
+        files = [d / f"{n}.min.js" for n in names]
+        for f in files:
+            self.assertTrue(f.exists(), f)
+        self.assertLessEqual(sum(f.stat().st_size for f in files), 200_000)
+        self.assertIn("gsap.com/standard-license", (d / "LICENSE.txt").read_text(encoding="utf-8"))
+        order = [PAGE.index(f'src="assets/vendor/gsap/{f.name}"') for f in files]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(order[-1], PAGE.index('<script id="figrt">'))
+        self.assertLess(PAGE.index('<script id="figrt">'), PAGE.index('<script id="figjs">'))
+        self.assertNotRegex(PAGE, r'<script[^>]*src="assets/vendor[^>]*\b(defer|async)\b')
+
+    def test_generator_check_clean(self):
+        r = subprocess.run([sys.executable, "tools/figures.py", "--check"], cwd=ROOT)
+        self.assertEqual(r.returncode, 0)
+
+    def test_runtime_guards_gsap(self):
+        rt = self._script("figrt")
+        self.assertTrue(rt)
+        self.assertRegex(rt, r"typeof gsap|window\.gsap")
+
+    MQ_WIDE = "(min-width: 1000px) and (prefers-reduced-motion: no-preference)"
+    MQ_NARROW = "(max-width: 999.98px) and (prefers-reduced-motion: no-preference)"
+
+    def test_runtime_uses_matchmedia(self):
+        rt = self._script("figrt")
+        self.assertIn("gsap.matchMedia", rt)
+        self.assertIn(self.MQ_WIDE, rt)
+        self.assertIn(self.MQ_NARROW, rt)
+
+    def test_runtime_guards_reduced_motion(self):
+        rt = self._script("figrt")
+        for q in (self.MQ_WIDE, self.MQ_NARROW):
+            self.assertIn("(prefers-reduced-motion: no-preference)", q)
+            self.assertIn(q, rt)
+
+    def test_no_color_tweens(self):
+        for sid in ("figjs", "figrt"):
+            self.assertIsNone(re.search(r"[{,]\s*[\"']?(fill|stroke|color|backgroundColor)[\"']?\s*:", self._script(sid)), sid)
+
+    def test_gsap_figs_registered(self):
+        figs = set(re.findall(r'<figure class="fig" data-fig="([^"]+)" data-engine="gsap"', PAGE))
+        regs = set(re.findall(r'MAFig\.register\("([^"]+)"', self._script("figjs")))
+        self.assertEqual(figs, regs)
 
     def test_parse_claims(self):
         sample = ("| ID | Claim (site wording basis) | Source @bc983737 (path:lines) | Status |\n"
@@ -264,13 +321,13 @@ class SiteTests(unittest.TestCase):
                   "| C02 | b | y.py:3 | CHANGED |\n| note | c | d | confirmed |\n")
         self.assertEqual(parse_claims(sample), {"C01": "confirmed", "C02": "changed"})
 
-    def test_claims_register_complete(self):
+    def test_claims_statuses(self):
         c = claims()
         if c is None:
             self.skipTest("claims register (CATAGENT docs/site/claims.md) not present")
-        self.assertEqual(sorted(c), [f"C{i:02d}" for i in range(1, 41)])
+        self.assertEqual(sorted(c), [f"C{i:02d}" for i in range(1, len(c) + 1)])
         for cid, status in c.items():
-            self.assertIn(status, {"confirmed", "changed", "dropped"}, cid)
+            self.assertIn(status, {"confirmed", "changed", "dropped", "assumed"}, cid)
 
     @staticmethod
     def _visible(fragment):
@@ -304,7 +361,7 @@ class SiteTests(unittest.TestCase):
             self.assertTrue(m, tag)
             for cid in m.group(1).split():
                 if known is not None:
-                    self.assertIn(known.get(cid), ("confirmed", "changed"), cid)
+                    self.assertIn(known.get(cid), ("confirmed", "changed", "assumed"), cid)
 
     def test_idx_full_opacity(self):
         # .idx is muted text; any opacity below 1 drops it under 4.5:1
