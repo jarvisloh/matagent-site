@@ -660,6 +660,47 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    def test_fig_planning(self):
+        import html
+        self.assertEqual(EXPECTED_SECTIONS.index("planning"), EXPECTED_SECTIONS.index("hypotheses") + 1)
+        sec = re.search(r'<section id="planning".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Drafts computational study designs</h2>", sec)
+        fig = re.search(r'<figure class="fig" data-fig="planning" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for word in ("CDTP 3.1", "CDTP 3.2", "CDTP 3.3", "3–6 steps", "1–200,000", "own estimate", "template",
+                         "suggested parameters", "FS", "resources and tools", "illustrative"):
+                self.assertIn(word, label.group(1), (v, word))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)  # core-hours and the FS value are illustrative
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the study designer
+            self.assertEqual(body.count('class="f-planning-row'), 6, v)  # six drafted steps, the most kept (C20)
+            for part in ("f-planning-bar", "f-planning-ok", "f-planning-x", "f-planning-strike", "f-planning-needle",
+                         "f-planning-stamp", "f-planning-odo"):
+                self.assertIn(part, body, (v, part))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+            shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body, flags=re.S)))
+            for want in ("RULE-BASED TEMPLATE", "CDTP 3.3", "own estimate", "run's own output"):
+                self.assertIn(want, shown, (v, want))
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 4)
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        self.assertIn("C58", " ".join(cards))  # suggested parameters (assumed)
+        self.assertIn("C45", " ".join(cards))  # FS as a resources-and-tools assessment (assumed)
+        js = re.search(r'MAFig\.register\("planning".*?<!-- figjs:planning:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
         p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"
