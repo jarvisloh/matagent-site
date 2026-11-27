@@ -32,6 +32,19 @@ ICONS = {
     "chat": '<path d="M3 3.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 15 12.5H8l-3.5 3v-3H3A1.5 1.5 0 0 1 1.5 11V5A1.5 1.5 0 0 1 3 3.5z"/>',
     "chain": '<rect x="1.5" y="6" width="5" height="5" rx="1.2"/><rect x="11.5" y="6" width="5" height="5" rx="1.2"/><path d="M6.5 8.5h5"/>',
     "plug": '<path d="M6.5 2v4M11.5 2v4M4 6h10v3.5a5 5 0 0 1-10 0zM9 14.5V17"/>',
+    # the ten material domains
+    "dm-catalyst": '<path d="M2 15.5h14"/><circle cx="5.5" cy="11.8" r="2.2"/><circle cx="12.5" cy="11.8" r="2.2"/><path d="M9 7.5V2.5M7 4.5l2-2 2 2"/>',
+    "dm-semiconductor": '<path d="M2 3.5h14M2 14.5h14"/><path d="M9 12.5v-6M7 8.5l2-2 2 2"/>',
+    "dm-polymer": '<path d="M1.5 12 4.5 6l3 6 3-6 3 6 3-6"/>',
+    "dm-metal": '<circle cx="5.5" cy="12.2" r="3.4"/><circle cx="12.5" cy="12.2" r="3.4"/><circle cx="9" cy="6.1" r="3.4"/>',
+    "dm-ceramic": '<path d="M9 2l6.5 3.5v7L9 16l-6.5-3.5v-7z"/><path d="M2.5 5.5 9 9l6.5-3.5M9 9v7"/>',
+    "dm-mof": ('<rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="12" y="1.5" width="4.5" height="4.5" rx="1"/>'
+               '<rect x="1.5" y="12" width="4.5" height="4.5" rx="1"/><rect x="12" y="12" width="4.5" height="4.5" rx="1"/>'
+               '<path d="M6 3.75h6M6 14.25h6M3.75 6v6M14.25 6v6"/><circle cx="9" cy="9" r="1.6"/>'),
+    "dm-zeolite": f'<path d="{hexpath(9, 9, 7.5)}"/><path d="{hexpath(9, 9, 3.4)}"/><path d="M9 1.5v4.1M2.5 12.75l3.55-2.05M15.5 12.75l-3.55-2.05"/>',
+    "dm-nano": '<circle cx="9" cy="7.5" r="4.6"/><path d="M3 15.5h12M3 14v3M15 14v3"/>',
+    "dm-composite": '<rect x="2" y="2.5" width="14" height="13" rx="1.5"/><path d="M2 6.8h14M2 11.2h14"/>',
+    "dm-bio": '<path d="M5 1.5c0 4 8 4 8 7.5s-8 3.5-8 7.5M13 1.5c0 4-8 4-8 7.5s8 3.5 8 7.5"/><path d="M6.3 4.4h5.4M6.3 13.6h5.4"/>',
 }
 
 # Hidden shared defs: one <symbol id="i-<name>"> per icon (18x18), the hexagon (r = 10) and the tick, and the arrowhead.
@@ -97,6 +110,7 @@ _SWATCH = {
     "tick": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-box"/><path d="M{x + 6.5},-4.5 l3.5,3.5 l6,-7" class="lg-tick"/>',
     "cell": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-cell"/>',
     "okc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-okc"/><path d="M{x + 6.5},-3.5 l3,3 l5.5,-6.5" class="lg-tick"/>',
+    "ring": lambda x: f'<circle cx="{x + 11}" cy="-4" r="4.5" class="lg-ring"/>',
     "xc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-xc"/><path d="M{x + 7.5},-7.5 l7,7 M{x + 14.5},-7.5 l-7,7" class="lg-x"/>',
 }
 
@@ -115,7 +129,9 @@ def note(x, y, text="values are illustrative"):
     return f'<g class="legend" transform="translate({f(x)},{f(y)})"><text x="0" y="0">{escape(text)}</text></g>'
 
 
-def svg(w, h, body, variant, label):
+def svg(w, h, body, variant, label, role="img", attrs=""):
+    """role="group" (with attrs 'data-fig-tiles="1"') for a figure whose tiles are keyboard-focusable."""
     if variant not in ("wide", "narrow"):
         raise ValueError(variant)
-    return f'<svg class="sch {variant}" viewBox="0 0 {w} {h}" role="img" aria-label="{escape(label)}">{body}</svg>'
+    a = f" {attrs}" if attrs else ""
+    return f'<svg class="sch {variant}" viewBox="0 0 {w} {h}" role="{role}"{a} aria-label="{escape(label)}">{body}</svg>'

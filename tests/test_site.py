@@ -149,7 +149,8 @@ class SiteTests(unittest.TestCase):
         for tag in re.findall(r"<svg\b[^>]*>", PAGE):
             if 'aria-hidden="true"' in tag and 'width="0"' in tag:  # the hidden shared-symbols sprite only
                 continue
-            self.assertIn('role="img"', tag)
+            # a figure with keyboard-focusable tiles is a group, so its tiles stay in the accessibility tree
+            self.assertIn('role="group"' if 'data-fig-tiles="1"' in tag else 'role="img"', tag)
             m = re.search(r'aria-label="([^"]*)"', tag)
             self.assertTrue(m and len(m.group(1)) >= 20, tag)
 
@@ -750,6 +751,69 @@ class SiteTests(unittest.TestCase):
         js = re.search(r'MAFig\.register\("vasp".*?<!-- figjs:vasp:end -->', self._script("figjs"), flags=re.S)
         self.assertTrue(js)
         self.assertIn("{scrub: true}", js.group(0))
+
+    DOMAIN_CHECKS = {  # C24: domain -> its checks (tile back text)
+        "Catalyst": ("composition sum", "charge balance"), "Semiconductor": ("charge balance", "radius mismatch"),
+        "Polymer": ("SMILES sanitises",), "Metal": ("composition sum",), "Ceramic": ("charge balance", "radius mismatch"),
+        "MOF": ("SMILES sanitises",), "Zeolite": ("IZA framework code", "Si/Al ≥ 1"), "Nanomaterial": ("charge balance",),
+        "Composite": ("composition sum",), "Biomaterial": ("SMILES sanitises", "charge balance")}
+
+    def test_fig_domains(self):
+        import html
+        self.assertEqual(EXPECTED_SECTIONS.index("domains"), EXPECTED_SECTIONS.index("vasp") + 1)
+        sec = re.search(r'<section id="domains".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Ten material domains</h2>", sec)
+        self.assertIn('<p class="kicker">08</p>', sec)
+        fig = re.search(r'<figure class="fig" data-fig="domains" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig)
+            self.assertTrue(tag, v)
+            self.assertIn('role="group"', tag.group(0))
+            label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            self.assertGreaterEqual(len(label), 20)
+            for word in ("RDKit", "IZA framework code", "Si/Al ≥ 1", "Löwenstein", "composition sum ≤ 101 %",
+                         "charge balance", "≤ 30 %", "unknown", "reject", "rank"):
+                self.assertIn(word, label, (v, word))
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the domain profile
+            tiles = re.findall(r'<g class="f-domains-tile"([^>]*)>(.*?)</g><!--/tile-->', body, flags=re.S)
+            self.assertEqual(len(tiles), 10, v)
+            for (attrs, inner), (name, checks) in zip(tiles, self.DOMAIN_CHECKS.items()):
+                self.assertIn('tabindex="0"', attrs)
+                self.assertIn('role="img"', attrs)
+                self.assertIn('data-flip="0"', attrs)
+                al = html.unescape(re.search(r'aria-label="([^"]*)"', attrs).group(1))
+                self.assertTrue(al.startswith(name), (v, al))
+                front = re.search(r'class="f-domains-face f-domains-front".*?(?=class="f-domains-face f-domains-back")', inner, flags=re.S).group(0)
+                back = inner[inner.index('class="f-domains-face f-domains-back"'):]
+                self.assertIn(html.escape(name), front)
+                self.assertIn('href="#i-dm-', front)  # its icon
+                shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", back)))
+                for c in checks:
+                    self.assertIn(c, shown, (v, name, c))
+                for other in {c for cs in self.DOMAIN_CHECKS.values() for c in cs} - set(checks):
+                    self.assertNotIn(other, shown, (v, name, other))
+            self.assertEqual(body.count('class="f-domains-pip"'), 15, v)  # one pip per (domain, check) pair
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+            self.assertNotIn("{", body)
+        c = css()
+        # hover and keyboard focus flip a tile through CSS alone (works without GSAP); a visible focus ring
+        self.assertRegex(c, r"\.f-domains-tile:is\(:hover, :focus, \[data-flip=\"1\"\]\) \.f-domains-front\s*\{[^}]*scaleX\(0\)")
+        self.assertRegex(c, r"\.f-domains-tile:focus-visible \.f-domains-ring\s*\{[^}]*visibility:\s*visible")
+        rm = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?\})\s*\}", c, flags=re.S).group(1)
+        self.assertRegex(rm, r"\.f-domains-face\s*\{[^}]*transition:\s*none")
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 2)
+        js = re.search(r'MAFig\.register\("domains".*?<!-- figjs:domains:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+        self.assertIn('"data-flip"', js.group(0))
 
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
