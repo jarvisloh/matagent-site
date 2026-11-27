@@ -53,8 +53,10 @@ SYMBOLS = (
     "".join(f'<symbol id="i-{n}" viewBox="0 0 18 18" width="18" height="18" overflow="visible">{d}</symbol>' for n, d in ICONS.items())
     + f'<symbol id="hex" viewBox="-10 -10 20 20" width="20" height="20" overflow="visible"><path d="{hexpath(0, 0, 10)}" vector-effect="non-scaling-stroke"/></symbol>'
     + '<symbol id="chk" viewBox="0 0 12 12" width="12" height="12" overflow="visible"><path d="M2.5 6.4 5 8.8 9.6 3.4"/></symbol>'
-    + '<marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
-    '<path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)"/></marker>'
+    + "".join(f'<marker id="{i}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+              f'<path d="M0,0 L8,4 L0,8 z" fill="var({c})"/></marker>'
+              # teal (flow, accepted) and amber (waits, rejected) connectors keep their colour to the arrowhead (CSS marker-end)
+              for i, c in (("arr", "--line-strong"), ("arr-acc", "--accent"), ("arr-amb", "--accent-2")))
 )
 
 
@@ -122,6 +124,7 @@ _SWATCH = {
     "dia": lambda x: f'<path d="M{x + 11},-11 l7,7 l-7,7 l-7,-7 z" class="lg-dia"/>',
     "hdot": lambda x: f'<circle cx="{x + 11}" cy="-4" r="5" class="lg-hdot"/>',
     "isle": lambda x: f'<ellipse cx="{x + 11}" cy="-4" rx="11" ry="8" class="lg-isle"/><circle cx="{x + 11}" cy="-4" r="3" class="lg-dot"/>',
+    "xbox": lambda x: f'<rect x="{x + 2}" y="-13" width="18" height="18" rx="4" class="lg-xc"/><path d="M{x + 7},-8 l8,8 M{x + 15},-8 l-8,8" class="lg-x"/>',
     "xc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-xc"/><path d="M{x + 7.5},-7.5 l7,7 M{x + 14.5},-7.5 l-7,7" class="lg-x"/>',
 }
 

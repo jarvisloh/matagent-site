@@ -12,6 +12,8 @@ import math
 
 from figkit import Figure, curve, curve_d, f, hdr, icon, legend, note, svg
 
+CLAIMS = ("C20", "C21", "C45", "C52", "C58", "C59")  # register rows this figure's text and aria-label rest on
+
 GAPS = ["Ag effect on *CO", "C–C coupling sites"]  # the gap list (illustrative)
 PAGES = ["3", "7", "12"]  # the excerpts shown, by page (illustrative)
 # drafted steps (illustrative): task, method, suggested parameters, gap, cited page, core-hours, failed rule

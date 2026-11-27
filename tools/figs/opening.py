@@ -1,10 +1,12 @@
 """Opening figure: the MatAgent core in a honeycomb of the five core modules and shared memory, inside a dial with a
 radar sweep. A question enters through chat, agent modes or MCP; artefacts come back (claims C41-C45, C01-C03, C20,
-C21, C24, C27-C29, C35, C36, C39). The SVG is the finished frame; the GSAP intro animates from hidden states."""
+C21, C24, C27-C29, C35, C36, C39; C72, assumed, for the sandbox checks). The SVG is the finished frame; the GSAP intro animates from hidden states."""
 import math
 from html import escape
 
 from figkit import Figure, curve, f, hdr, hexpath, icon, legend, svg
+
+CLAIMS = ("C01", "C02", "C03", "C20", "C21", "C24", "C27", "C28", "C29", "C35", "C36", "C39", "C41", "C42", "C43", "C44", "C45", "C72")  # register rows this figure's text and aria-label rest on
 
 T = 9.0       # one sweep, s
 T_LOOP = 10.4  # sweep, then the run record is saved before the next sweep
@@ -30,13 +32,13 @@ ARTS = [
     ("Study plan", "model or rule-based", "PLAN", CELL_T[2]),
     ("New modules", "code + sandbox checks", "DISCOVER", CELL_T[3]),
     ("Run scores", "model-assisted", "EVALUATE", CELL_T[4]),
-    ("Run record", "inputs, outputs, trace", "EACH RUN", T),
+    ("Run record", "input, outputs, events", "EACH RUN", T),
 ]
 ASKS = [("chat", "Chat", "tool use · operations"), ("chain", "Agent modes", "single runs · chains"),
         ("plug", "MCP server", "ten tools · stdio, SSE")]
 QUESTION = ("Which dopants stabilise", "Ni-rich layered oxides?")
 LABEL = ("MatAgent schematic: a question reaches MatAgent through chat, agent modes or the MCP server. The chat agent "
-         "starts modes, which run on five core modules, SEARCH, AUGMENT, PLAN, DISCOVER and EVALUATE, with shared "
+         "starts modes, which run on five core modules, SEARCH, PLAN, AUGMENT, DISCOVER and EVALUATE, with shared "
          "memory. A run returns ranked papers, answers that cite pages, a study plan, new code modules checked in a "
          "sandbox and model-assisted run scores, and each run is saved as a record.")
 LEGEND = [("flow", "schematic sweep, no fixed order"), ("dot", "artefact returned")]

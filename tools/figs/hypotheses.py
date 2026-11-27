@@ -10,6 +10,8 @@ from html import escape
 
 from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
+CLAIMS = ("C12", "C13", "C14", "C15", "C16", "C17", "C56", "C57")  # register rows this figure's text and aria-label rest on
+
 # ---------------------------------------------------------------- illustrative data
 SOURCES = [("Paper search", "≤ 10 per query"), ("Knowledge base", "≤ 8 per query"),
            ("Materials Project", "baseline formula")]

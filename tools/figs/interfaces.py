@@ -12,6 +12,8 @@ from html import escape
 
 from figkit import Figure, f, hdr, icon, legend, note, svg, vcurve_d
 
+CLAIMS = ("C33", "C34", "C35", "C36", "C50", "C73", "C74", "C75")  # register rows this figure's text and aria-label rest on
+
 # (title, detail, how it is mapped, icon, mapping kind, orbit angle in degrees, clockwise from +x), in launch order
 SRC = [("Uploads", "CSV, JSON, Excel", "language model", "upload", "lm", 135),
        ("Materials Project", "needs an API key", "template → CatPlat", "dm-ceramic", "tpl", 180),

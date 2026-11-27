@@ -7,6 +7,8 @@ from html import escape
 
 from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
+CLAIMS = ("C01", "C02", "C03", "C47", "C49", "C53")  # register rows this figure's text and aria-label rest on
+
 T_LOOP = 10.4  # one replay; the loop period adds HOLD + .4 before it
 HOLD = 1.6  # loop: the finished frame stays this long before the replay clears it
 LENS_S = 1.8  # lens magnification
@@ -15,7 +17,7 @@ FT = {"merge": 0, "text": .3, "images": 1.0, "thumbs": 1.6, "chunks": 1.9, "char
       "graph": 7.2, "answer": 8.1}
 QUESTION = {"wide": ("Which dopants", "stabilise Ni-rich", "layered oxides?"),
             "narrow": ("Which dopants stabilise", "Ni-rich layered oxides?")}
-SOURCES = [("Semantic Scholar", False), ("Google Scholar", False), ("arXiv · fallback", True)]
+SOURCES = [("Semantic Scholar", False), ("Google Scholar", True), ("arXiv · fallback", True)]  # Scholar: optional (C01)
 # BM25 rows, best first: score (illustrative), page, state (kept; cap = skipped, a third chunk from one page; out = below top k)
 ROWS = [(7.9, 4, "kept"), (6.4, 6, "kept"), (5.8, 4, "kept"), (5.1, 4, "cap"), (4.3, 2, "kept"), (2.2, 9, "out")]
 KEPT_PAGES = "[p. 4] [p. 6] [p. 2]"
@@ -28,8 +30,8 @@ ANSWER = {"wide": [("Mg doping suppresses", "", ""), ("Li/Ni mixing ", "[p. 4]",
           "narrow": [("Mg doping suppresses Li/Ni", "", ""), ("mixing ", "[p. 4]", "; doped cells"),
                      ("retain more capacity ", "[p. 6]", "")]}
 READING = ["[p. 6] Mg-doped cells", "retain more capacity"]
-LABEL = ("Reading the literature: LR 1.1 turns a question into up to five queries to Semantic Scholar and Google "
-         "Scholar, with arXiv as a fallback, merges and ranks the results lexically and downloads the top papers. "
+LABEL = ("Reading the literature: LR 1.1 turns a question into up to five queries to Semantic Scholar and, when "
+         "the scholarly package is installed, Google Scholar, with arXiv as a fallback, merges and ranks the results lexically and downloads the top papers. "
          "Each PDF's page text is split into overlapping chunks of about 1,200 characters and ranked by BM25; the top "
          "k are kept, at most two per page. By default the page images are read too: ColSmol-500M ranks them and a "
          "vision-language model reads the top pages, charts included. With a knowledge-graph source, a graph neural "
@@ -320,7 +322,7 @@ def _narrow():
     P.append(_question(16, 34, 328, 84, "narrow"))
     P.append('<path class="cv f-literature-q2" d="M30,118 V144" marker-end="url(#arr)"/>'
              '<text class="lbl f-literature-note" x="40" y="136">up to 5 queries</text>')
-    P.append(_chip(16, 148, 160, 30, SOURCES[0][0], False) + _chip(184, 148, 160, 30, SOURCES[1][0], False)
+    P.append(_chip(16, 148, 160, 30, SOURCES[0][0], False) + _chip(184, 148, 160, 30, SOURCES[1][0], True)
              + _chip(16, 184, 160, 30, SOURCES[2][0], True))
     P.append('<text class="sub f-literature-note" x="190" y="198">merged · ranked</text>'
              '<text class="sub f-literature-note" x="190" y="216">top 5 PDFs</text>')

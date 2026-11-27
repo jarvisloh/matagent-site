@@ -11,6 +11,8 @@ from html import escape
 
 from figkit import Figure, curve, f, hdr, hexpath, legend, note, svg, vcurve_d
 
+CLAIMS = ("C07", "C44", "C45", "C59", "C66", "C67")  # register rows this figure's text and aria-label rest on
+
 # (code, what it measures, lamp: what the score rests on, run token: modes, run output EVALUATE reads, illustrative value)
 SCORES = [("GCS", "Gap closure", "language-model judge", "GAR 2.1", "gaps, papers read", 67),
           ("RCS", "RAG coverage", "term-count formula", "MMR 4.2 · 4.5 · 4.8", "analysis text", 74),
@@ -166,7 +168,7 @@ LEGEND = [("hex", "a mode's run and its output"), ("flow", "output reaches its g
 LABEL = ("An instrument cluster of EVALUATE's six scores, each a model-assisted measure of a run's own output, not an "
          "independent check; each runs 0–100 but has its own method, so the scores are not comparable. A mode's run "
          "delivers its output, and only then does its gauge's lamp light and its needle settle. "
-         "GCS, gap closure, for GAR 2.1: a language model judges which gaps the papers read close, 100 × closed ÷ judged, "
+         "GCS, gap closure, for GAR 2.1: a language model judges whether the papers it read close each gap, 100 × closed ÷ judged, "
          "with word overlap as the fallback. RCS, RAG coverage, for MMR 4.2, 4.5 and 4.8: a term-count formula over the "
          "analysis text, in three parts worth up to 40, 35 and 25. HFS, hypothesis formulation, for HF 8.4: a weighted "
          "sum of five dimensions of each hypothesis record, weights 25, 25, 20, 15 and 15. The inner ring of these three "

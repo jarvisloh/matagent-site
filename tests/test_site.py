@@ -124,7 +124,7 @@ class SiteTests(unittest.TestCase):
             self.assertIn(re.match(r"https?://([^/]+)", url).group(1),
                           {"fonts.googleapis.com", "fonts.gstatic.com"}, url)
         for src in re.findall(r'<script[^>]*\bsrc="([^"]+)"', PAGE):
-            self.assertRegex(src, r"^assets/vendor/gsap/(gsap|ScrollTrigger|DrawSVGPlugin|MorphSVGPlugin)\.min\.js$")
+            self.assertRegex(src, r"^assets/vendor/gsap/(gsap|ScrollTrigger|DrawSVGPlugin)\.min\.js$")
         # any fetch() at all must target a literal allowed URL, never a computed one
         self.assertEqual(len(re.findall(r"\bfetch\(", scripts)),
                          len(re.findall(r"""fetch\(\s*['"`]https?://""", scripts)))
@@ -268,7 +268,7 @@ class SiteTests(unittest.TestCase):
 
     def test_gsap_vendored(self):
         d = ROOT / "assets" / "vendor" / "gsap"
-        names = ("gsap", "ScrollTrigger", "DrawSVGPlugin", "MorphSVGPlugin")
+        names = ("gsap", "ScrollTrigger", "DrawSVGPlugin")
         files = [d / f"{n}.min.js" for n in names]
         for f in files:
             self.assertTrue(f.exists(), f)
@@ -278,7 +278,11 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(order, sorted(order))
         self.assertLess(order[-1], PAGE.index('<script id="figrt">'))
         self.assertLess(PAGE.index('<script id="figrt">'), PAGE.index('<script id="figjs">'))
-        self.assertNotRegex(PAGE, r'<script[^>]*src="assets/vendor[^>]*\b(defer|async)\b')
+        # a deferred or async vendor script runs after #figrt and silently disables every figure (either attribute order)
+        for tag in re.findall(r'<script\b[^>]*src="assets/vendor[^>]*>', PAGE):
+            self.assertNotRegex(tag, r"\b(defer|async)\b", tag)
+        self.assertFalse((d / "MorphSVGPlugin.min.js").exists())  # unused: no morphSVG tween anywhere
+        self.assertNotIn("MorphSVG", PAGE)
 
     def test_generator_check_clean(self):
         r = subprocess.run([sys.executable, "tools/figures.py", "--check"], cwd=ROOT)
@@ -467,7 +471,7 @@ class SiteTests(unittest.TestCase):
 
     def test_fig_opening(self):
         sec = re.search(r'<section id="opening".*?</section>', PAGE, flags=re.S).group(0)
-        fig = re.search(r'<figure class="fig" data-fig="opening" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="opening" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -499,7 +503,7 @@ class SiteTests(unittest.TestCase):
         self.assertTrue(sec)
         sec = sec.group(0)
         self.assertIn("<h2>Five modules, four capability groups</h2>", sec)
-        fig = re.search(r'<figure class="fig" data-fig="modules" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="modules" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -532,7 +536,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(EXPECTED_SECTIONS.index("literature"), EXPECTED_SECTIONS.index("modules") + 1)
         sec = re.search(r'<section id="literature".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Reads the literature</h2>", sec)
-        fig = re.search(r'<figure class="fig" data-fig="literature" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="literature" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -569,7 +573,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(EXPECTED_SECTIONS.index("gaps"), EXPECTED_SECTIONS.index("literature") + 1)
         sec = re.search(r'<section id="gaps".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Finds what is missing</h2>", sec)
-        fig = re.search(r'<figure class="fig" data-fig="gaps" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="gaps" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -606,7 +610,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(EXPECTED_SECTIONS.index("hypotheses"), EXPECTED_SECTIONS.index("gaps") + 1)
         sec = re.search(r'<section id="hypotheses".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Formulates hypotheses</h2>", sec)
-        fig = re.search(r'<figure class="fig" data-fig="hypotheses" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="hypotheses" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -644,7 +648,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(EXPECTED_SECTIONS.index("planning"), EXPECTED_SECTIONS.index("hypotheses") + 1)
         sec = re.search(r'<section id="planning".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Drafts computational study designs</h2>", sec)
-        fig = re.search(r'<figure class="fig" data-fig="planning" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="planning" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -688,7 +692,7 @@ class SiteTests(unittest.TestCase):
         sec = sec.group(0)
         self.assertIn("<h2>Prepares and runs VASP workflows</h2>", sec)
         self.assertIn('<p class="kicker">07</p>', sec)
-        fig = re.search(r'<figure class="fig" data-fig="vasp" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="vasp" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -742,7 +746,7 @@ class SiteTests(unittest.TestCase):
         sec = re.search(r'<section id="domains".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Ten material domains</h2>", sec)
         self.assertIn('<p class="kicker">08</p>', sec)
-        fig = re.search(r'<figure class="fig" data-fig="domains" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="domains" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -814,7 +818,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual([k for _, k in kick], [f"{EXPECTED_SECTIONS.index(i) + 1:02d}" for i, _ in kick])
         cap = re.search(r"<figcaption>(.*?)</figcaption>", sec, flags=re.S).group(1)
         self.assertIn("model-assisted measures of a run's own output", html.unescape(cap))
-        fig = re.search(r'<figure class="fig" data-fig="scores" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="scores" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -866,9 +870,10 @@ class SiteTests(unittest.TestCase):
 
     # (record tag, details in turn) in the order the slips land in the ledger (C28, C68); a run keeps one checkpoint,
     # rewritten in place after each step
+    # a chained run's record holds each step's result (status, outputs, metrics, error), not a run-level trace (C28)
     RECORD_SLIPS = [("INPUT", ("secrets redacted",)),
                     ("CHECKPOINT", ("after step 1", "step 2 failed", "after step 2", "after step 3")),
-                    ("OUTPUTS · METRICS", ()), ("TRACE", ())]
+                    ("STEP RESULTS", ())]
 
     def test_fig_record(self):
         import html
@@ -878,7 +883,7 @@ class SiteTests(unittest.TestCase):
         cap = html.unescape(re.search(r"<figcaption>(.*?)</figcaption>", sec, flags=re.S).group(1))
         for want in ("ask", "re-runs", "approves"):
             self.assertIn(want, cap)
-        fig = re.search(r'<figure class="fig" data-fig="record" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="record" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -890,8 +895,11 @@ class SiteTests(unittest.TestCase):
                          "event stream", "append-only", "read-only", "illustrative"):
                 self.assertIn(word, label, (v, word))
             self.assertNotIn("stage gate", label.lower())
+            self.assertIn("each step's result", label)
+            self.assertNotRegex(label, r"\btrace (is|are) stored|metrics and trace")
             body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
             shown = html.unescape(" ".join(re.findall(r"<text[^>]*>(.*?)</text>", body)))
+            self.assertNotIn("TRACE<", body.replace("EVENT TRACE", ""))
             self.assertIn('class="legend"', body, v)
             self.assertIn("values are illustrative", body, v)
             self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the scope
@@ -964,7 +972,7 @@ class SiteTests(unittest.TestCase):
         sec = re.search(r'<section id="improvement".*?</section>', PAGE, flags=re.S).group(0)
         self.assertIn("<h2>Improves and extends itself</h2>", sec)
         self.assertIn('<p class="kicker">11</p>', sec)
-        fig = re.search(r'<figure class="fig" data-fig="improvement" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="improvement" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         for v in ("wide", "narrow"):
@@ -1033,7 +1041,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("<h2>Data and interfaces</h2>", sec)
         self.assertIn('<p class="kicker">12</p>', sec)
         self.assertEqual(EXPECTED_SECTIONS.index("interfaces"), EXPECTED_SECTIONS.index("improvement") + 1)
-        fig = re.search(r'<figure class="fig" data-fig="interfaces" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        fig = re.search(r'<figure class="fig" data-fig="interfaces" data-engine="gsap"[^>]*>.*?</figure>', sec, flags=re.S)
         self.assertTrue(fig)
         fig = fig.group(0)
         self.assertNotRegex(html.unescape(re.sub(r"<[^>]+>", " ", sec)) + fig, r"VASP|[Vv]alidat")  # MCP copy never names VASP
@@ -1114,7 +1122,7 @@ class SiteTests(unittest.TestCase):
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
         self.assertTrue(m)
-        self.assertGreaterEqual(int(m.group(1)), 500)
+        self.assertGreaterEqual(int(m.group(1)), 559)  # brand + motion + theme toggles + CTA need ~560 px
 
     def test_percent_thin_space(self):
         text = visible_text(PAGE)
@@ -1133,6 +1141,88 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("MatPlat adapters", text)
         self.assertNotIn("CatPlat catalyst database", text)
         self.assertIn("composition sum ≤", text)
+
+    def test_figures_have_claims(self):
+        # each figure's text and aria-label rest on the rows its module lists in CLAIMS (written as data-claims)
+        known = claims()
+        tags = re.findall(r'<figure class="fig"[^>]*>', PAGE)
+        self.assertEqual(len(tags), 12)
+        sys.path.insert(0, str(ROOT / "tools"))
+        import importlib
+        for tag in tags:
+            fid = re.search(r'data-fig="([^"]+)"', tag).group(1)
+            m = re.search(r'data-claims="([^"]+)"', tag)
+            self.assertTrue(m, tag)
+            self.assertEqual(m.group(1).split(), list(importlib.import_module(f"figs.{fid}").CLAIMS), fid)
+            for cid in m.group(1).split():
+                if known is not None:
+                    self.assertIn(known.get(cid), ("confirmed", "changed", "assumed"), (fid, cid))
+        figs = dict(re.findall(r'<figure class="fig" data-fig="([^"]+)"[^>]*data-claims="([^"]+)"', PAGE))
+        self.assertIn("C72", figs["opening"].split())  # sandbox checks in the opening rest on C72 (assumed)
+        self.assertIn("C72", figs["improvement"].split())
+
+    def test_motion_toggle(self):
+        # WCAG 2.2.2: one page-level control pauses every looping figure; its state is remembered per viewer
+        h = re.search(r"<header.*?</header>", PAGE, flags=re.S).group(0)
+        self.assertRegex(h, r'<button[^>]*id="motion-toggle"[^>]*type="button"[^>]*aria-pressed="false"')
+        self.assertRegex(h, r'id="motion-toggle"[^>]*aria-label="Pause animations"')
+        m = re.search(r"#motion-toggle\s*\{([^}]*)\}", css())
+        for prop in ("min-width", "min-height"):
+            self.assertGreaterEqual(int(re.search(prop + r":\s*(\d+)px", m.group(1)).group(1)), 44, prop)
+        # hidden unless the runtime animates (no GSAP, no JS or reduced motion: static frames, nothing to pause)
+        self.assertRegex(css(), r"#motion-toggle\s*\{[^}]*display:\s*none")
+        self.assertRegex(css(), r"\.motion #motion-toggle\s*\{[^}]*display:")
+        rt = self._script("figrt")
+        self.assertIn('getElementById("motion-toggle")', rt)
+        self.assertIn('"matagent-motion"', rt)
+        self.assertRegex(rt, r"if \(done && seen && !paused\) loop\.play\(\)")
+        self.assertRegex(rt, r'setAttribute\("aria-pressed", paused\)')
+
+    def test_runtime_guards_and_print(self):
+        rt = self._script("figrt")
+        # every figure draws connectors with drawSVG: without the plugin, keep the static frames
+        self.assertRegex(rt, r'if \(typeof gsap === "undefined" \|\| typeof ScrollTrigger === "undefined" \|\| typeof DrawSVGPlugin === "undefined"\) return;')
+        self.assertNotIn('addEventListener("resize"', rt)  # ScrollTrigger refreshes on resize itself, debounced
+        # print media matches neither query, so every figure reverts to its static (finished) frame
+        self.assertIn('wide: "screen and ' + self.MQ_WIDE + '"', rt)
+        self.assertIn('narrow: "screen and ' + self.MQ_NARROW + '"', rt)
+        self.assertIn('addEventListener("beforeprint"', rt)
+
+    def test_fixwave_copy(self):
+        import html
+        text = html.unescape(visible_text(PAGE))
+        self.assertNotIn("papers read close", text)
+        self.assertNotRegex(text, r"\bcatalog\b")  # British spelling: catalogue
+        self.assertNotRegex(text, r"SEARCH, AUGMENT, PLAN")  # module order as in §2: SEARCH, PLAN, AUGMENT
+        self.assertNotIn("outputs and trace", text)  # a chained run's record has no run-level trace (C28)
+        meth = [self._visible(b) for b in re.findall(r'<p class="method">(.*?)</p>', PAGE, flags=re.S)]
+        self.assertTrue(any("no worse and ≥ 10 % cheaper" in b for b in meth))  # C30: both conditions for tier targets
+        self.assertTrue(any("closure score (GCS)" in b for b in meth))
+        vasp = re.search(r'<article class="card" data-claims="([^"]+)">\s*<h3>Parsed results', PAGE)
+        self.assertIn("C62", vasp.group(1).split())
+        # arrowheads keep the colour of their connector
+        self.assertIn('<marker id="arr-acc"', PAGE)
+        self.assertIn('<marker id="arr-amb"', PAGE)
+        self.assertRegex(css(), r"marker-end:\s*url\(#arr-amb\)")
+
+    def test_improvement_stages_sequence(self):
+        # the stage track is progress over time, never a grouping of c1-c12: each caption names who is scored
+        import html
+        fig = re.search(r'<figure class="fig" data-fig="improvement".*?</figure>', PAGE, flags=re.S).group(0)
+        for v in ("wide", "narrow"):
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            caps = [html.unescape(t) for t in re.findall(r'<text class="tag"[^>]*data-w="[^"]*"[^>]*>(STAGE [^<]*)</text>', body)]
+            self.assertEqual(caps, ["STAGE 1 · ALL 12 ON 20\u202f% SUBSET", "STAGE 2 · TOP 4 ON SELECT SPLIT",
+                                    "STAGE 3 · 3 ON HOLDOUT"], v)
+            self.assertNotRegex(body, r">\d · (20|SELECT|HOLDOUT)")
+
+    def test_literature_scholar_optional(self):
+        fig = re.search(r'<figure class="fig" data-fig="literature".*?</figure>', PAGE, flags=re.S).group(0)
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0)
+            self.assertIn("scholarly", tag, v)
+            body = re.search(r'<svg class="sch %s".*?</svg>' % v, fig, flags=re.S).group(0)
+            self.assertRegex(body, r'<g class="card f-literature-src dashed">(?:(?!</g>).)*Google Scholar', v)  # optional (C01)
 
 
 if __name__ == "__main__":

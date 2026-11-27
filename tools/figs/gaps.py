@@ -9,6 +9,8 @@ import math
 
 from figkit import Figure, curve_d, f, hdr, icon, legend, note, svg
 
+CLAIMS = ("C07", "C08", "C09", "C10", "C11", "C55")  # register rows this figure's text and aria-label rest on
+
 T_LOOP = 11.6
 A0 = 5.8  # loop: panel b replays first (after a hold on the finished frame), then panel a from A0
 # literature gaps (illustrative), verdict and the paper named (1-based); rejected = a closed verdict whose quote has
@@ -47,7 +49,7 @@ LABEL = ("Panel a, gap closure: GAR 2.1 collects gaps by rules, without a langua
          "whose units differ are not compared, and, when one is available, a language model re-extracts conflicting "
          "findings. The gaps, values and score are illustrative.")
 LEGEND = [("tick", "closed: paper named, quoted"), ("cell", "empty: no paper named"),
-          ("amber", "rejected · contradiction"), ("dash", "optional · fallback")]
+          ("xbox", "rejected: no gap term"), ("amber", "contradiction"), ("dash", "optional · fallback")]
 
 
 LATE = "cv f-gaps-in f-gaps-late"  # connectors into and out of the judge, drawn with the panel
@@ -322,7 +324,10 @@ def _wide():
                 P.append(f'<text class="lbl amb f-gaps-flag" x="{f(_dx(x0, L, 20) - 8)}" y="{f(mid - 8)}" '
                          f'text-anchor="end">different methods: flagged</text>')
     P.append(f'<text class="lbl f-gaps-bl" x="{x0 - 14}" y="{bb + 30}" text-anchor="end">relative deviation, √ scale</text>')
-    P.append(legend(LEGEND, 30, H - 38) + note(30, H - 12))
+    # four swatches on the first row; the dashed one shares the second row with the note
+    assert 30 + sum(30 + int(len(t) * 8.1) + 22 for _, t in LEGEND[:4]) <= 1070
+    P.append(legend(LEGEND[:4], 30, H - 38) + legend(LEGEND[4:], 30, H - 12)
+             + note(30 + 30 + int(len(LEGEND[4][1]) * 8.1) + 22, H - 12))
     return svg(W, H, "".join(P), "wide", LABEL)
 
 
@@ -403,8 +408,8 @@ def _narrow():
     ay = r0 + len(PAIRS) * rpn + 2
     P.append(_axis(x0, L, ay, sev_y=ay + 42))
     P.append(f'<text class="lbl f-gaps-bl" x="16" y="{ay + 64}">relative deviation, √ scale</text>')
-    H = ay + 64 + 24 + 24 * 5
-    P.append("".join(legend([it], 16, H - 108 + 24 * k) for k, it in enumerate(LEGEND)) + note(16, H - 12))
+    H = ay + 64 + 24 + 24 * (len(LEGEND) + 1)
+    P.append("".join(legend([it], 16, H - 12 - 24 * (len(LEGEND) - k)) for k, it in enumerate(LEGEND)) + note(16, H - 12))
     return svg(W, H, "".join(P), "narrow", LABEL)
 
 

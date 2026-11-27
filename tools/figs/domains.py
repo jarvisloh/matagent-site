@@ -9,6 +9,8 @@ from html import escape
 
 from figkit import ICONS, Figure, f, hdr, legend, svg
 
+CLAIMS = ("C13", "C14", "C24")  # register rows this figure's text and aria-label rest on
+
 NB = " "  # narrow no-break space before %
 SQ3 = math.sqrt(3)
 

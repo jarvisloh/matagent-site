@@ -21,9 +21,8 @@ INDEX = Path(os.environ.get("FIGURES_INDEX") or Path(__file__).resolve().parent.
 Figure = figkit.Figure  # single definition lives in figkit so figs/<id>.py never import this (possibly __main__) module
 
 
-FIGURES: dict[str, Callable[[], Figure]] = {
-    m.name: importlib.import_module(f"figs.{m.name}").build for m in sorted(pkgutil.iter_modules(figs.__path__), key=lambda m: m.name)
-}
+MODULES = {m.name: importlib.import_module(f"figs.{m.name}") for m in sorted(pkgutil.iter_modules(figs.__path__), key=lambda m: m.name)}
+FIGURES: dict[str, Callable[[], Figure]] = {k: m.build for k, m in MODULES.items()}
 
 
 def _swap(html, key, body):
@@ -37,6 +36,13 @@ def render_all(html):
     html = _swap(html, "symbols", f"\n{figkit.SYMBOLS}\n")
     for fid, build in FIGURES.items():
         fig = build()
+        claims = " ".join(MODULES[fid].CLAIMS)  # the register rows the figure's text and aria-label rest on
+        if not claims:
+            raise SystemExit(f"figs/{fid}.py needs a non-empty CLAIMS tuple")
+        tag = re.compile(r'<figure class="fig" data-fig="%s" data-engine="gsap"(?: data-claims="[^"]*")?>' % re.escape(fid))
+        if len(tag.findall(html)) != 1:
+            raise SystemExit(f"index.html needs exactly one <figure> for '{fid}'")
+        html = tag.sub(f'<figure class="fig" data-fig="{fid}" data-engine="gsap" data-claims="{claims}">', html)
         html = _swap(html, f"fig:{fid}", f"\n{fig.wide}\n{fig.narrow}\n")
         html = _swap(html, f"figjs:{fid}", f"\n{fig.js}\n")
     return html

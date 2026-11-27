@@ -1,4 +1,4 @@
-"""Improvement figure: improves and extends itself (claims C30, C32, C43, C48, C51, C54, C67, C69, C70, C71).
+"""Improvement figure: improves and extends itself (claims C30, C32, C43, C48, C51, C54, C67, C69, C70, C71, C72).
 (a) An improvement run on a live score plot (C30, C69): the baseline is measured, 12 candidates are scored on the 20 %
 subset (stage 1) and the top third move on to the whole select split (stage 2); up to three above the baseline's select
 mean take holdout confidence intervals against the baseline's holdout mean plus a margin (stage 3); the one whose lower
@@ -6,7 +6,7 @@ bound clears waits for an administrator, and only then becomes active. A dashed 
 approval writes a local git branch (C32).
 (b) The self-extension bench: a plain-language description (C48) -> library search over the registry, PyPI and GitHub,
 ranked by relevance (C54) -> the generated module and its tests type into the editor (the one dark focal panel) ->
-syntax, import, type, lint and contract checks, then the tests in an isolated runner (C43) -> files staged only once the
+syntax, import, type, lint and contract checks, then the tests in an isolated runner (C43, C72 assumed) -> files staged only once the
 checks pass, promotion a separate step (C51, C70) -> readiness (ARS) only once test and security results exist (C67).
 Beside it OpenEvolve (C71): five islands drawn as contour maps, each new program a dot placed by its fitness (summit =
 higher fitness), the best one marked at the end. Migration is not drawn (not claimed). Values are illustrative."""
@@ -15,6 +15,8 @@ import random
 from html import escape
 
 from figkit import Figure, curve, curve_d, f, hdr, legend, note, svg, vcurve_d
+
+CLAIMS = ("C30", "C32", "C43", "C48", "C51", "C54", "C67", "C69", "C70", "C71", "C72")  # register rows this figure's text and aria-label rest on
 
 CW = {"wide": 7.68, "narrow": 8.04}  # Geist Mono advance per character at the sub size
 TW = {"wide": 9.22, "narrow": 9.65}  # tag advance (0.6 em + .12 em letter-spacing)
@@ -173,24 +175,21 @@ def _plot(v, x0, y0, x1, y1, cx, win_lbl, clabels):
     return "".join(P)
 
 
-def _track(v, x0, x1, y, tags_y):
-    """Stage progress: three thirds that fill in turn; wide shows the three tags, narrow one caption that changes."""
+def _track(v, x0, x1, y, cx, cy):
+    """Stage progress over time: three thirds that fill in turn, and one caption at (cx, cy) that changes with the stage
+    and names who is scored, so the thirds never read as groups of c1-c12 (the finished frame shows stage 3)."""
     w = (x1 - x0) / 3
     P = [f'<path class="f-improvement-trk" d="M{x0},{y} H{x1}"/>']
-    tags = [f"1 · 20{NB}% SUBSET", "2 · SELECT SPLIT", "3 · HOLDOUT"]
+    tags = [f"STAGE 1 · ALL 12 ON 20{NB}% SUBSET", f"STAGE 2 · TOP {len(KEEP)} ON SELECT SPLIT",
+            f"STAGE 3 · {len(ABOVE)} ON HOLDOUT"]
     for j, (t0, d) in enumerate(SEG):
         a, b = x0 + j * w + (2 if j else 0), x0 + (j + 1) * w - (2 if j < 2 else 0)
         P.append(f'<path class="f-improvement-prog f-improvement-draw" d="M{f(a)},{y} H{f(b)}" {_at("seg", t0)} data-dd="{_tv(d)}"/>')
-        if tags_y is not None:
-            assert len(tags[j]) * TW[v] <= w - 8
-            P.append(_txt("tag", x0 + (j + .5) * w, tags_y, tags[j], "middle"))
-    if tags_y is None:
-        on = [0, SEG[1][0], SEG[2][0]]
-        for j, s in enumerate(tags):
-            s = "STAGE " + s
-            assert len(s) * TW[v] <= x1 - 12
-            w_ = f'data-w="{_tv(on[j])} {_tv(on[j + 1] - .2)}"' if j < 2 else f'data-w="{_tv(on[j])}"'
-            P.append(_txt("tag", 12, y + 24, s, attrs=w_ + ("" if j == 2 else ' opacity="0"')))
+    on = [0, SEG[1][0], SEG[2][0]]
+    for j, s in enumerate(tags):
+        assert cx + len(s) * TW[v] <= x1
+        w_ = f'data-w="{_tv(on[j])} {_tv(on[j + 1] - .2)}"' if j < 2 else f'data-w="{_tv(on[j])}"'
+        P.append(_txt("tag", cx, cy, s, attrs=w_ + ("" if j == 2 else ' opacity="0"')))
     return "".join(P)
 
 
@@ -406,7 +405,7 @@ LABEL = ("Two panels; values are illustrative. (a) An improvement run measures a
          "tests. A readiness score, ARS, 0–100, is reported only when test and security results back it. OpenEvolve, "
          "SE 7.4, which needs an Anthropic API key, evolves code over five island populations for 50 iterations by "
          "default; each dot is a program, placed higher on its island the higher its fitness, which weighs 0.2 syntax, "
-         "0.2 imports, 0.3 tests, 0.15 lint and 0.15 types. The best program is recorded in the module catalog.")
+         "0.2 imports, 0.3 tests, 0.15 lint and 0.15 types. The best program is recorded in the module catalogue.")
 
 
 # --- layouts ----------------------------------------------------------------------------------------------------------
@@ -416,7 +415,7 @@ def _wide():
     P = [_defs(pre), _pl(30, 31, "a"), hdr(52, 30, "CANDIDATES AGAINST THE BASELINE"), hdr(690, 30, "PATH TO ACTIVE")]
     x0, y0, x1, y1 = 96, 52, 660, 352
     P.append(_plot(v, x0, y0, x1, y1, lambda i: x0 + 28 + 36 * i, 14, "all"))
-    P.append(_track(v, x0, x1, 410, 398))
+    P.append(_track(v, x0, x1, 410, x0, 398))
     lad, ya = _ladder(v, 690, 50, 230, 58, 74, 14)
     P.append(lad)
     gy = ya - 14
@@ -467,7 +466,7 @@ def _wide():
     P.append(_txt("lbl", 30, 990, "here from a catalogued module"))
     isl, cen, (bx, by) = _islands(740, 902, 250, 64, 54, v)
     P.append(isl)
-    P.append(_txt("sub", 740, 774, "best → module catalog", "middle", _at("best", T_BEST)))
+    P.append(_txt("sub", 740, 774, "best → catalogue", "middle", _at("best", T_BEST)))
     P.append(_txt("lbl", 412, 800, "each dot a program") + _txt("lbl", 1070, 800, "summit = higher fitness", "end"))
     H = 1040
     items = _legend_items()
@@ -482,7 +481,7 @@ def _narrow():
     P = [_defs(pre), _pl(12, 25, "a"), hdr(34, 24, "CANDIDATES VS BASELINE")]
     x0, y0, x1, y1 = 50, 40, 348, 264
     P.append(_plot(v, x0, y0, x1, y1, lambda i: x0 + 16 + 16 * i, 10, "holdout"))
-    P.append(_track(v, x0, x1, 296, None))
+    P.append(_track(v, x0, x1, 296, 12, 320))
     P.append(hdr(12, 356, "PATH TO ACTIVE"))
     lad, ya = _ladder(v, 12, 370, 336, 52, 60, 14)
     P.append(lad)
@@ -549,7 +548,7 @@ def _narrow():
     P.append(_iters(12, oy + 152, 336))
     ry = oy + 308
     isl, cen, _b = _islands(180, ry, 118, 62, 33, v)
-    P.append(_txt("sub", 180, ry - 62 - 33 - 12, "best → module catalog", "middle", _at("best", T_BEST)))
+    P.append(_txt("sub", 180, ry - 62 - 33 - 12, "best → catalogue", "middle", _at("best", T_BEST)))
     P.append(isl)
     yl = ry + 62 * .81 + 33 + 22
     P.append(_txt("lbl", 180, yl, "each dot a program;", "middle") + _txt("lbl", 180, yl + 18, "summit = higher fitness", "middle"))

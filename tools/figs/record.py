@@ -3,13 +3,16 @@ The dark scope (the one focal panel) carries the harness controls you set (C26: 
 partial results, post-run output checks) and a screen on which the run's event trace scrolls past a write head: each
 step is a pulse, a checkpoint diamond follows each step, step 2 fails, and under "ask" the trace flat-lines in amber,
 paused for human review, until a person approves; then step 2 re-runs (step 1 is kept, not re-run) and step 3 runs.
-Each event lights a tick in the stored event stream, and records drop onto a ledger stack beside the scope (C28, C68)
+Each event lights a tick in the stored event stream, and records drop onto a ledger stack beside the scope (C28, C68;
+the last is the step results: each step's outputs and metrics, no run-level trace)
 only after their event has passed the head. Times are illustrative."""
 import json
 import math
 from html import escape
 
 from figkit import Figure, curve_d, f, hdr, legend, note, svg, vcurve_d
+
+CLAIMS = ("C26", "C28", "C68")  # register rows this figure's text and aria-label rest on
 
 CW = {"wide": 7.68, "narrow": 8.04}  # Geist Mono advance per character at the sub size
 TW = {"wide": 9.22, "narrow": 9.65}  # tag advance (0.6 em + .12 em letter-spacing)
@@ -47,13 +50,14 @@ EVENTS = [(2.6, 0), (8, 0), (19, 0), (23, 0), (U_FAIL, 1), (U_PAUSE, 1), (U_OK, 
           (100, 0)]
 # the run record's slips (C28, C68): (record, details in turn). A run keeps ONE checkpoint and each save replaces it,
 # so the checkpoint slip lands once and its detail is rewritten in place; the failed result (amber) is dropped on
-# approval and survives in the event stream, not in the checkpoint.
+# approval and survives in the event stream, not in the checkpoint. A chained run's record holds each step's result
+# (status, outputs, metrics, error) and no run-level trace (C28: GraphRunResult/NodeResult have no trace).
 SLIPS = [("INPUT", ("secrets redacted",)),
          ("CHECKPOINT", ("after step 1", "step 2 failed", "after step 2", "after step 3")),
-         ("OUTPUTS · METRICS", ()), ("TRACE", ())]
+         ("STEP RESULTS", ())]
 CK_AMBER = 1  # the checkpoint detail that holds the failed result
 # (event u, slip): every write to the record, in order; one flow along the connector each
-WRITES = [(2.6, 0)] + [(u, 1) for u in CHECKPOINTS] + [(100, 2), (100, 3)]
+WRITES = [(2.6, 0)] + [(u, 1) for u in CHECKPOINTS] + [(100, 2)]
 # (text, event u, band, anchor, anchor u): screen labels (wide bands; narrow puts them all in the label column)
 LABELS = [("run starts", 2.6, "low", "start", .4), ("step 1", 8, "top", "middle", 13.5),
           ("step 2", 23, "top", "middle", 27), ("step 2 fails", U_FAIL, "low", "middle", U_DIP),
@@ -306,7 +310,8 @@ LABEL = ("An oscilloscope trace of one chained run, with a run record beside it;
          "checkpoint is saved; under ask, the run pauses for human review and the trace flat-lines in amber until a person "
          "approves. Then step 2 re-runs, while step 1 keeps its result and is not re-run, and step 3 runs, each followed by "
          "a checkpoint. The run keeps one checkpoint and each save replaces the last, so once approved the failed result is "
-         "dropped from it and remains in the event stream. When the run completes, its outputs, metrics and trace are stored. Every event goes to the "
+         "dropped from it and remains in the event stream. When the run completes, each step's result, with its outputs and "
+         "metrics, is stored in the record. Every event goes to the "
          "run's stored event stream. A run can be paused, resumed, cancelled and replayed, and a report generated from its "
          "record. Values are illustrative.")
 

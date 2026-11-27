@@ -8,6 +8,8 @@ from html import escape
 
 from figkit import Figure, f, flathex, hdr, legend, svg
 
+CLAIMS = ("C01", "C02", "C03", "C08", "C21", "C29", "C41", "C43", "C44", "C45", "C46", "C47", "C48", "C51", "C72")  # register rows this figure's text and aria-label rest on
+
 # cells left to right (wide) / top to bottom (narrow): title, icon, core?, callout title, callout lines (<= 22 chars)
 CELLS = [
     ("MEMORY", "memory", False, "Shared memory", ["facts and lessons", "added to each run", "kept for review"]),
@@ -18,14 +20,14 @@ CELLS = [
     ("EVALUATE", "evaluate", True, "Six model-assisted scores", ["of a run's own output"]),
     ("NEW MODE", "plug", False, "Staged agent mode", ["from DISCOVER", "handler and test", "awaits promotion"]),
 ]
-SCORES = [("GCS", "gap closure"), ("FS", "feasibility"), ("RCS", "RAG coverage"),
-          ("ICS", "completeness"), ("ARS", "readiness"), ("HFS", "hypotheses")]
+SCORES = [("GCS", "gap closure"), ("RCS", "RAG coverage"), ("HFS", "hypotheses"),
+          ("FS", "feasibility"), ("ICS", "completeness"), ("ARS", "readiness")]  # the order of the scores section
 LABEL = ("MatAgent's five core modules as a honeycomb, each with a callout. SEARCH turns a question into up to five "
          "queries, merges the results and ranks them by relevance. PLAN queries the database, lists gaps in the data and "
          "makes a rule-based study plan. AUGMENT answers questions citing pages, reads charts and images, and summarises "
          "findings. DISCOVER turns a description into a code module, runs its tests in a sandbox and builds chemistry "
-         "integrations. EVALUATE gives six model-assisted scores of a run's own output: GCS gap closure, FS feasibility, "
-         "RCS RAG coverage, ICS completeness, ARS readiness and HFS hypotheses. Beside them, shared memory adds facts and "
+         "integrations. EVALUATE gives six model-assisted scores of a run's own output: GCS gap closure, RCS RAG coverage, "
+         "HFS hypotheses, FS feasibility, ICS completeness and ARS readiness. Beside them, shared memory adds facts and "
          "lessons to each run and keeps them for review, and DISCOVER stages new agent modes, with a handler and a test, "
          "that await promotion.")
 LEGEND = [("hex", "core module, no fixed order"), ("hexdash", "memory · staged mode"), ("dot", "callout: what it does")]

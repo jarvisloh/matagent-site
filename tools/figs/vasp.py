@@ -12,6 +12,8 @@ from html import escape
 
 from figkit import Figure, curve_d, f, hdr, legend, note, svg
 
+CLAIMS = ("C22", "C23", "C60", "C61", "C62", "C63", "C64", "C65")  # register rows this figure's text and aria-label rest on
+
 NB = "\u202f"  # narrow no-break space before units
 CW = {"wide": 7.68, "narrow": 8.04}  # Geist Mono advance per character at the sub size
 TAGW = {"wide": 9.22, "narrow": 9.65}  # tag advance (0.6 em + .12 em letter-spacing)
