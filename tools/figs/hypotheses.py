@@ -21,10 +21,10 @@ TIERS = [("quick", [("inspiration", "screened inspirations", False)]),
                         ("anomaly detection", "outliers ≥ 2.5 SD", True),
                         ("trend extrapolation", "line fit per property", True),
                         ("contradiction resolution", "LCA agreement map", False)])]
-N_GEN, PER_GEN = 7, 4  # deep effort: four candidates per generator (C57)
+N_GEN, PER_GEN = 7, 4  # illustrative; deep asks each generator twice for four (up to eight), then merges (C57)
 CHECKS = ["schema", "elements", "≠ baseline", "answers the goal", "hard constraints", "SMILES · RDKit", "IZA code",
           "Si/Al ≥ 1", "Σ ≤ 101 %"]
-VERDICTS = [("supports", True), ("already explained", False), ("other explanation", False),
+VERDICTS = [("supports", True), ("already explained", False), ("other more likely", False),
             ("missing piece", False), ("neutral", False), ("disproved", True)]  # True: stands only with a quote
 SEVERITY = ["minor", "major", "fatal"]
 # particle n comes from generator n % 7; its fate: ("seat", s) | ("hard", check row) | ("dis",) | ("fatal",) | ("dup",)
@@ -33,14 +33,17 @@ FATES = [("seat", 0), ("hard", 1), ("seat", 1), ("hard", 5), ("dup",), ("hard", 
          ("hard", 4), ("dup",), ("fatal",), ("seat", 5), ("hard", 3), ("hard", 5), ("seat", 6),
          ("dis",), ("hard", 7), ("dup",), ("hard", 4), ("fatal",), ("seat", 7), ("hard", 6)]
 N_SEAT = 8
+N_HARD = sum(x[0] == "hard" for x in FATES)  # rest slots in the trays
+N_REV = sum(x[0] in ("dis", "fatal") for x in FATES)
 # games between seats (i < j, 0-based): winner seat, "t" tie, "x" failed and excluded; pairs not listed were not paired
 GAMES = {(0, 1): 0, (0, 2): 2, (0, 3): 0, (0, 5): "t", (0, 7): 0, (1, 2): 2, (1, 3): 1, (1, 4): 1, (1, 6): "x",
          (1, 7): "t", (2, 3): 2, (2, 4): 2, (2, 5): 2, (2, 7): 2, (3, 4): "t", (3, 6): 3, (4, 5): 5, (4, 6): 6,
          (5, 6): 5, (5, 7): 5, (6, 7): 7}
-# Bradley-Terry log-strength and its bootstrap interval, fitted to GAMES with the code's method (alpha 0.1, 200
-# resamples, seed 0); critic score and soft-check failures are illustrative
-BT = [(1.07, .27, 1.92), (-.01, -.82, .82), (2.4, 1.27, 2.9), (-.9, -1.61, .38), (-1.71, -2.45, -.47),
-      (.87, -.09, 1.47), (-1.34, -2.34, -.03), (-.38, -1.41, .46)]
+# Bradley-Terry log-strength and its bootstrap interval: HF/pipeline/rank.py's bradley_terry and bootstrap_ci
+# (alpha 0.1, 200 resamples, random.Random(0)) run on GAMES in this dict order, failed game left out (numpy 1.21.6);
+# refit if GAMES changes. Critic score and soft-check failures are illustrative.
+BT = [(1.07, .25, 1.95), (-.01, -.97, .79), (2.4, 1.05, 2.86), (-.9, -1.71, .15), (-1.71, -2.53, -.49),
+      (.87, .02, 1.45), (-1.34, -2.37, .29), (-.38, -1.32, .34)]
 CRITIC = [5, 4, 4, 3, 3, 4, 2, 3]
 SOFT = [0, 0, 0, 1, 0, 1, 0, 0]
 BT_MAX = 3.0  # strength axis runs -3..+3
@@ -70,8 +73,8 @@ assert sum(1 for x in FATES if x[0] == "seat") == N_SEAT and len(FATES) == N_GEN
 LABEL = ("Hypothesis machine. Before generation, paper search (up to 10 results per query), the knowledge base (up "
          "to 8) and Materials Project (a baseline formula) are queried, and a language model screens the results into "
          "inspirations. All seven generators run, each a language-model prompt: inspiration at quick effort; "
-         "assumption hop and analogy added at standard; and at deep, four candidates each, database pattern, anomaly "
-         "detection (values at least 2.5 standard deviations from the mean, by default) and trend extrapolation, "
+         "assumption hop and analogy added at standard; and at deep, where each generator is asked twice and the "
+         "results are merged, database pattern, anomaly detection (values at least 2.5 standard deviations from the mean, by default) and trend extrapolation, "
          "which query the database's records, and contradiction resolution, from an LCA agreement map. Candidates "
          "pour into rule-based gates: schema, element symbols, not the baseline, answering the goal, hard "
          "constraints, and domain checks (SMILES sanitised by RDKit, a valid IZA code, Si/Al at least 1, a "
@@ -82,28 +85,31 @@ LABEL = ("Hypothesis machine. Before generation, paper search (up to 10 results 
          "score from 1 to 5; a fatal flaw rejects unless none would remain. Near-duplicates are removed, then a judge "
          "that sees no IDs, generator or lineage compares pairs in both presentation orders: a pair is won only if "
          "won in both, a split is a tie, and failed games are excluded. At deep effort each candidate plays its most "
-         "similar ones, up to 150 pairs. A Bradley–Terry model is fitted to the games with bootstrap intervals, and "
+         "similar ones, up to 150 pairs, and the top three also debate. A Bradley–Terry model is fitted to the games with bootstrap intervals, and "
          "the final order puts gate, critic score, flaws and soft checks ahead of strength. The candidates, games, "
          "scores and strengths are illustrative.")
 LEGEND = [("dot", "candidate"), ("adot", "rejected"), ("cell", "not paired"), ("dash", "game failed: excluded")]
 
 # ---------------------------------------------------------------- timing (s from the start of a pass; both variants)
-EMIT0, EMIT_DT = .5, .075
-LEG = {"mouth": .22, "check": .4, "slot": .25, "chute": .45, "rest": .35, "neck": .35, "lens": .45,
-       "out": .55, "tray2": .5, "lane": 1.05, "dedup": .3, "seat": .5}
+EMIT0, EMIT_DT = .4, .045
+LEG = {"mouth": .2, "check": .32, "slot": .2, "chute": .4, "rest": .3, "neck": .3, "lens": .35,
+       "out": .45, "tray2": .45, "lane": .6, "dedup": .25, "seat": .4}
 NONHARD = [n for n, x in enumerate(FATES) if x[0] != "hard"]
 R0 = EMIT0 + EMIT_DT * NONHARD[-1] + LEG["mouth"] + LEG["check"] + LEG["neck"] + LEG["lens"] + .2  # review starts
-SCAN = 1.3
-CHIP_T = [round(R0 + .2 + .14 * i, 3) for i in range(len(VERDICTS))]
-SEV_T = [round(R0 + 1.2 + .15 * i, 3) for i in range(3)]
-X0 = R0 + 1.85  # the lens empties
-EXIT_DT = .07
+SCAN = .9
+CHIP_T = [round(R0 + .12 + .09 * i, 3) for i in range(len(VERDICTS))]
+SEV_T = [round(R0 + .8 + .1 * i, 3) for i in range(3)]
+X0 = round(R0 + 1.25, 3)  # the lens empties
+EXIT_DT = .045
 SEAT_T = X0 + EXIT_DT * (len(NONHARD) - 1) + LEG["out"] + LEG["lane"] + LEG["dedup"] + LEG["seat"]
 G0 = round(SEAT_T + .25, 3)  # pairs drawn
-CELL_DT = .075
-B0 = round(G0 + .35 + CELL_DT * len(GAMES) + .45, 3)  # bars grow
-SORT_T, RANK_T = round(B0 + 1.0, 3), round(B0 + 1.7, 3)
-PASS_END = RANK_T + .4
+CELL_DT = .04
+# the game card: order 1, the swap, order 2, the rule lines, the swap back (one clock with the cells)
+GAME_T = {"o1": round(G0 + .05, 3), "swap": round(G0 + .25, 3), "o2": round(G0 + .7, 3), "rule": round(G0 + .95, 3),
+          "back": round(G0 + 1.3, 3)}
+B0 = round(G0 + .35 + CELL_DT * len(GAMES) + .3, 3)  # bars grow
+SORT_T, RANK_T = round(B0 + .75, 3), round(B0 + 1.35, 3)
+PASS_END = RANK_T + .3
 HOLD = 2.2  # loop: the finished frame holds, then clears, then a pass replays
 T0_LOOP = HOLD + .9
 T_LOOP = round(T0_LOOP + PASS_END + .1, 3)
@@ -163,7 +169,7 @@ def _particles(G):
     lens_spots = G["lens_spots"](len(NONHARD))
     for j, n in enumerate(NONHARD):
         lens_j[n] = j
-    seat_arrive = []
+    seat_arrive, dup_t = [], []
     for n, fate in enumerate(FATES):
         g = n % N_GEN
         te, kind = _te(n), fate[0]
@@ -199,6 +205,7 @@ def _particles(G):
         wp = _walk(te, G["nozzle"](g), legs)
         if kind == "dup":
             fade = wp[-1][0]
+            dup_t.append(fade)
         if kind == "seat":
             seat_arrive.append((fate[1], wp[-1][0]))
         if kind == "hard":  # turns amber at the check it fails, not before
@@ -218,7 +225,7 @@ def _particles(G):
                    f'<circle class="f-hypotheses-pta" r="3.6"{"" if amb else hide}/></g>')
     seat_t = dict(seat_arrive)
     assert max(seat_t.values()) <= G0 - .2 + 1e-6, max(seat_t.values())
-    return "".join(out), seat_t
+    return "".join(out), seat_t, dup_t
 
 
 # ---------------------------------------------------------------- components
@@ -239,12 +246,15 @@ def _src(x, y, w, h, title, sub, inline):
     return f'<g class="card f-hypotheses-src"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="8"/>{t}</g>'
 
 
-def _gen(x, y, w, h, name, sub, db, g):
-    ic = icon("memory", x + w - 24, y + 13, "ic f-hypotheses-db") if db else ""
+def _gen(x, y, w, h, name, sub, db, g, tier=None):
+    """Generator card with its nozzle; tier (narrow): the lowest effort that runs it, as a tag on the title line,
+    which moves the database icon down to the sub-label line."""
+    ic = icon("memory", x + w - 24, y + (21 if tier else 13), "ic f-hypotheses-db") if db else ""
+    tg = f'<text class="tag" x="{f(x + w - 12)}" y="{f(y + 17)}" text-anchor="end">{tier}</text>' if tier else ""
     cy = y + h / 2
     return (f'<g class="card f-hypotheses-gen"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="9"/>'
             f'<text class="ttl sm" x="{f(x + 14)}" y="{f(y + 17)}">{escape(name)}</text>'
-            f'<text class="sub" x="{f(x + 14)}" y="{f(y + 36)}">{escape(sub)}</text>{ic}'
+            f'<text class="sub" x="{f(x + 14)}" y="{f(y + 36)}">{escape(sub)}</text>{ic}{tg}'
             f'<path class="f-hypotheses-noz" d="M{f(x + w)},{f(cy - 7)} L{f(x + w + 10)},{f(cy - 4)} V{f(cy + 4)} L{f(x + w)},{f(cy + 7)} Z"/>'
             f'<circle class="f-hypotheses-nglow" cx="{f(x + w + 11)}" cy="{f(cy)}" r="7" opacity="0" data-g="{g}"/></g>')
 
@@ -316,9 +326,11 @@ def _panel_head(pre, x, y, w, h, tx, ty, subs):
                       for k, t in enumerate(subs)))
 
 
-def _dedup(cx, cy):
+def _dedup(cx, cy, times):
+    """Two overlapping candidates; one pulse ring per removed near-duplicate, at the time it is removed."""
     return (f'<g class="f-hypotheses-dd"><circle cx="{f(cx - 12)}" cy="{f(cy)}" r="20"/><circle cx="{f(cx + 12)}" cy="{f(cy)}" r="20"/>'
-            f'<circle class="f-hypotheses-ddp" cx="{f(cx)}" cy="{f(cy)}" r="30" opacity="0"/></g>')
+            + "".join(f'<circle class="f-hypotheses-ddp" cx="{f(cx)}" cy="{f(cy)}" r="30" opacity="0" data-t="{t}"/>' for t in times)
+            + '</g>')
 
 
 def _table(x0, y0, c, seat_t):
@@ -361,10 +373,11 @@ def _table(x0, y0, c, seat_t):
     return "".join(P)
 
 
-def _game(x, y, w):
-    """One game, both orders: candidate X and Y swap slots A and B between the two judge calls."""
+def _game(x, y, w, side=False):
+    """One game, both orders: candidate X and Y swap slots A and B between the two judge calls. side: the order
+    lines sit beside the chips (narrow) instead of under them."""
     sw, sh, gap = 54, 38, 14
-    ax = x + (w - 2 * sw - gap) / 2
+    ax = x + 14 if side else x + (w - 2 * sw - gap) / 2
     bx = ax + sw + gap
     cy = y + 34
 
@@ -372,19 +385,21 @@ def _game(x, y, w):
         return (f'<g class="f-hypotheses-gc {cls}" data-dx="{f((bx - ax) if cls == "gx" else (ax - bx))}">'
                 f'<rect x="{f(cx)}" y="{f(cy)}" width="{sw}" height="{sh}" rx="6"/>'
                 f'<path d="M{f(cx + 8)},{f(cy + 11)} h{sw - 18} M{f(cx + 8)},{f(cy + 19)} h{sw - 24} M{f(cx + 8)},{f(cy + 27)} h{sw - 20}"/></g>')
-    lines = [("order 1 → picks A", G0 + .1), ("order 2 → picks B", G0 + .9), ("same idea: win", G0 + 1.25),
-             ("split → tie", G0 + 1.25)]
-    P = [f'<g class="card f-hypotheses-game"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(sh + 146)}" rx="10"/>'
+    lines = [("order 1 → picks A", GAME_T["o1"]), ("order 2 → picks B", GAME_T["o2"]),
+             ("same candidate: win", GAME_T["rule"]), ("split → tie", GAME_T["rule"])]
+    lx, ly = (bx + sw + 16, y + 30) if side else (x + 12, cy + sh + 40)
+    h = 104 if side else sh + 146
+    P = [f'<g class="card f-hypotheses-game"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{h}" rx="10"/>'
          f'<text class="tag" x="{f(x + 12)}" y="{f(y + 22)}">BOTH ORDERS</text>',
          chip(ax, "gx"), chip(bx, "gy"),
          f'<text class="tag" x="{f(ax + sw / 2)}" y="{f(cy + sh + 16)}" text-anchor="middle">A</text>'
          f'<text class="tag" x="{f(bx + sw / 2)}" y="{f(cy + sh + 16)}" text-anchor="middle">B</text>']
     for k, (s, t) in enumerate(lines):
-        P.append(f'<text class="sub f-hypotheses-go" x="{f(x + 12)}" y="{f(cy + sh + 40 + 19 * k)}" data-t="{round(t, 3)}">{escape(s)}</text>')
+        P.append(f'<text class="sub f-hypotheses-go" x="{f(lx)}" y="{f(ly + 19 * k)}" data-t="{t}">{escape(s)}</text>')
     return "".join(P) + "</g>"
 
 
-def _bars(x_id, x_crit, x_soft, zx, scale, y0, pitch, seat_t, inline):
+def _bars(x_id, x_crit, x_soft, zx, scale, y0, pitch, seat_t):
     """Leaderboard rows, placed in final order; each row carries data-dy back to its seat order. The rank numbers
     sit outside the rows."""
     P = []
@@ -392,19 +407,14 @@ def _bars(x_id, x_crit, x_soft, zx, scale, y0, pitch, seat_t, inline):
         y = y0 + pos * pitch
         v, lo, hi = BT[s]
         bx, bw = (zx, v * scale) if v >= 0 else (zx + v * scale, -v * scale)
-        by = y + (14 if inline else -10)
+        by = y - 10
         soft = " amb" if SOFT[s] else ""
-        if inline:
-            meta = (f'<text class="sub f-hypotheses-hid" x="{f(x_id)}" y="{f(y)}">H{s + 1}</text>'
-                    f'<text class="sub" x="{f(x_crit)}" y="{f(y)}">critic {CRITIC[s]}</text>'
-                    f'<text class="sub{soft}" x="{f(x_soft)}" y="{f(y)}">soft {SOFT[s]}</text>')
-        else:
-            meta = (f'<text class="sub f-hypotheses-hid" x="{f(x_id)}" y="{f(y)}">H{s + 1}</text>'
-                    f'<text class="sub" x="{f(x_crit)}" y="{f(y)}" text-anchor="middle">{CRITIC[s]}</text>'
-                    f'<text class="sub{soft}" x="{f(x_soft)}" y="{f(y)}" text-anchor="middle">{SOFT[s]}</text>')
+        meta = (f'<text class="sub f-hypotheses-hid" x="{f(x_id)}" y="{f(y)}">H{s + 1}</text>'
+                f'<text class="sub" x="{f(x_crit)}" y="{f(y)}" text-anchor="middle">{CRITIC[s]}</text>'
+                f'<text class="sub{soft}" x="{f(x_soft)}" y="{f(y)}" text-anchor="middle">{SOFT[s]}</text>')
         ciy = by + 6
         ci = (f'<path class="f-hypotheses-ci" d="M{f(zx + lo * scale)},{f(ciy)} H{f(zx + hi * scale)} '
-              f'M{f(zx + lo * scale)},{f(ciy - 5)} v10 M{f(zx + hi * scale)},{f(ciy - 5)} v10" data-t="{round(B0 + .6, 3)}"/>')
+              f'M{f(zx + lo * scale)},{f(ciy - 5)} v10 M{f(zx + hi * scale)},{f(ciy - 5)} v10" data-t="{round(B0 + .45, 3)}"/>')
         P.append(f'<g class="f-hypotheses-row" data-t="{seat_t[s]}" data-dy="{(s - pos) * pitch}">{meta}'
                  f'<rect class="f-hypotheses-bar{" neg" if v < 0 else ""}" x="{f(bx)}" y="{f(by)}" width="{f(bw)}" height="12" rx="3" '
                  f'data-t="{round(B0 + .05 * pos, 3)}" data-z="{f(zx)}"/>{ci}</g>')
@@ -428,10 +438,6 @@ def _rank_nums(x, y0, pitch):
 def _flow(d, t, arrow=False):
     m = ' marker-end="url(#arr)"' if arrow else ""
     return f'<path class="cv f-hypotheses-in" d="{d}"{m}/><path class="f-hypotheses-flow" d="{d}" data-t="{t}" opacity="0"/>'
-
-
-def _pts_d(pts):
-    return "M" + " L".join(f"{f(x)},{f(y)}" for x, y in pts)
 
 
 # ---------------------------------------------------------------- wide
@@ -491,7 +497,8 @@ def _wide():
                            "they only lower the rank"]):
         P.append(f'<text class="lbl f-hypotheses-fn" x="480" y="{500 + 18 * k + (10 if k > 1 else 0)}">{escape(s)}</text>')
     P.append(_tray(tray_x, tray_y, tray_w, tray_h, 490, 629))
-    rest = [(572 + 16 * (i % 9), 614 + 20 * (i // 9)) for i in range(17)]
+    rest = [(572 + 16 * (i % 9), 614 + 20 * (i // 9)) for i in range(N_HARD + N_REV)]
+    assert N_HARD + N_REV <= 18  # two rows of nine
     # the language model: lens, verdicts, critic
     px, py, pw, ph = 726, 56, 344, 424
     lx, ly, lr = 820, 214, 60
@@ -510,8 +517,7 @@ def _wide():
     P.append(f'<path class="cv f-hypotheses-in" d="{lane}" marker-end="url(#arr)"/>')
     # tier 2: near-duplicates, tournament, rank
     ddx, ddy = 100, 790
-    P.append(hdr(40, 728, "NEAR-DUPLICATES") + _dedup(ddx, ddy)
-             + '<text class="sub" x="40" y="840">removed first</text>')
+    P.append(hdr(40, 728, "NEAR-DUPLICATES") + '<text class="sub" x="40" y="840">removed first</text>')
     x0, y0, c = 244, 766, 28
     P.append(hdr(200, 728, "TOURNAMENT · BLIND"))
     seat_xy = [(x0 - 36, y0 + i * c + c / 2) for i in range(N_SEAT)]
@@ -527,18 +533,18 @@ def _wide():
         "lens_in": lambda spot: _hcurve((F["x1"] - 4, 266), spot, 5),
         "lens_spots": lambda m: _sun(lx, ly, 42, m),
         "lens_out": lambda spot: [(lx - 44, ly + 46)] + _cub((lx - 44, ly + 46), (750, 290), (736, 300), (736, 330), 3) + [(736, py + ph)],
-        "tray2": lambda i: _cub((736, py + ph), (736, 560), (712, 560), (712, tray_y + 8), 4) + [rest[13 + i]],
+        "tray2": lambda i: _cub((736, py + ph), (736, 560), (712, 560), (712, tray_y + 8), 4) + [rest[N_HARD + i]],
         "lane": lambda: [(736, 660), (720, 676), (40, 676), (24, 692), (24, 774), (40, 790), (66, 790)],
         "dedup": (ddx, ddy),
         "seat": lambda s: _hcurve((ddx + 24, ddy), seat_xy[s], 6),
     }
-    parts, seat_t = _particles(G)
-    P.append(_table(x0, y0, c, seat_t))
+    parts, seat_t, dup_t = _particles(G)
+    P.append(_dedup(ddx, ddy, dup_t) + _table(x0, y0, c, seat_t))
     P.append(f'<text class="lbl f-hypotheses-tn" x="{x0}" y="{y0 + N_SEAT * c + 24}">deep: similar pairs, ≤ 150 (default)</text>'
              f'<text class="lbl f-hypotheses-tn" x="{x0}" y="{y0 + N_SEAT * c + 42}">blank: not paired</text>')
-    P.append(_game(490, 744, 150))
-    P.append(f'<text class="lbl f-hypotheses-tn" x="490" y="944">the judge sees no IDs,</text>'
-             f'<text class="lbl f-hypotheses-tn" x="490" y="962">generator or lineage</text>')
+    P.append(_game(482, 744, 168))
+    P.append(f'<text class="lbl f-hypotheses-tn" x="482" y="944">the judge sees no IDs,</text>'
+             f'<text class="lbl f-hypotheses-tn" x="482" y="962">generator or lineage</text>')
     # rank
     zx, sc, ry0, rp = 950, 36, 785, 28
     P.append(hdr(660, 728, "RANK"))
@@ -547,7 +553,7 @@ def _wide():
              '<text class="tag" x="818" y="756" text-anchor="middle">SOFT</text>'
              f'<text class="tag" x="{zx}" y="756" text-anchor="middle">BRADLEY–TERRY STRENGTH</text>')
     P.append(_axis(zx, sc, 762, ry0 + (N_SEAT - 1) * rp + 10, ry0 + (N_SEAT - 1) * rp + 30))
-    P.append(_bars(690, 752, 818, zx, sc, ry0, rp, seat_t, False) + _rank_nums(666, ry0, rp))
+    P.append(_bars(690, 752, 818, zx, sc, ry0, rp, seat_t) + _rank_nums(666, ry0, rp))
     P.append(f'<text class="lbl" x="660" y="{ry0 + (N_SEAT - 1) * rp + 52}">order: gate, critic score, flaws, soft checks, then strength</text>'
              f'<text class="lbl" x="660" y="{ry0 + (N_SEAT - 1) * rp + 70}">log strength · 95 % bootstrap interval, 200 resamples</text>')
     P.append(f'<g filter="url(#{pre}-glow)">{parts}</g>')
@@ -563,28 +569,23 @@ def _narrow():
     W, pre = NARROW["W"], "hypotheses-n"
     P = [_defs(pre), hdr(16, 24, "RETRIEVE")]
     for k, (t, s) in enumerate(SOURCES):
-        P.append(_src(24, 36 + 40 * k, 320, 34, t, s, True))
-    P.append('<path class="cv f-hypotheses-in" d="M24,53 H12 M24,93 H12 M24,133 H12 M12,53 V183 H20" marker-end="url(#arr)"/>')
-    P.append(_src(24, 166, 320, 34, "Inspirations", "model-screened", True))
-    P.append(hdr(16, 238, "GENERATORS"))
-    gens, y = [], 262
-    for tier, items in TIERS:
-        P.append(f'<text class="lbl f-hypotheses-tier" x="24" y="{y}">{escape(tier)}</text>')
-        y += 8
-        for name, sub, db in items:
-            gens.append((y, name, sub, db))
-            y += 48
-        y += 22 - 48 + 42
+        P.append(_src(24, 34 + 38 * k, 320, 32, t, s, True))
+    P.append('<path class="cv f-hypotheses-in" d="M24,50 H12 M24,88 H12 M24,126 H12 M12,50 V170 H20" marker-end="url(#arr)"/>')
+    P.append(_src(24, 154, 320, 32, "Inspirations", "model-screened", True))
+    P.append(hdr(16, 218, "GENERATORS")
+             + '<text class="lbl f-hypotheses-tier" x="344" y="218" text-anchor="end">tag: lowest effort that runs it</text>')
+    tags = {"quick": "QUICK+", "standard adds": "STANDARD+", "deep adds": "DEEP"}
+    gens = [(232 + 46 * k, tags[tier], *it) for k, (tier, it) in enumerate((t, it) for t, items in TIERS for it in items)]
     mids = [gy + 21 for gy, *_ in gens]
-    P.append(_flow(f"M12,183 V{mids[-1]}", .05))
+    P.append(_flow(f"M12,170 V{mids[-1]}", .05))
     P += [f'<path class="cv f-hypotheses-in" d="M12,{m} H22" marker-end="url(#arr)"/>' for m in mids]
-    for g, (gy, name, sub, db) in enumerate(gens):
-        P.append(_gen(24, gy, 280, 42, name, sub, db, g))
+    for g, (gy, tier, name, sub, db) in enumerate(gens):
+        P.append(_gen(24, gy, 280, 42, name, sub, db, g, tier))
     gb = gens[-1][0] + 42  # generators' bottom
     # vertical funnel: mouth on top, neck below
-    f0 = gb + 44
-    P.append(hdr(16, f0 - 14, "SCREEN · HARD CHECKS"))
-    fl, fr, nl, nr, fh = 16, 344, 160, 200, 300
+    f0 = gb + 40
+    P.append(hdr(16, f0 - 12, "SCREEN · HARD CHECKS"))
+    fl, fr, nl, nr, fh = 16, 344, 150, 210, 240
 
     def edges(yy):
         t = (yy - f0) / fh
@@ -593,100 +594,103 @@ def _narrow():
              f'<path class="f-hypotheses-rim" d="M{fl},{f0} H{fr}"/>')
     rows = []
     for k, c in enumerate(CHECKS):
-        yy = f0 + 26 + 26 * k
+        yy = f0 + 22 + 22 * k
         wdt = 13 + len(c) * 8.04
         x = 180 - (wdt + 13) / 2 + 6.5
         le, re = edges(yy - 12)
         assert le + 2 < x - 7 and x + 13 + len(c) * 8.04 < re - 2, (c, le, re)
         P.append(_check(x, yy, c))
         rows.append((x, yy))
-    slot = edges(f0 + 230)[0], f0 + 230
-    t1 = (16, f0 + 250, 106, 112)  # tray 1: hard-check failures, beside the funnel's lower half
+    slot = edges(f0 + 170)[0], f0 + 170
+    t1 = (16, f0 + 186, 96, 98)  # tray 1: hard-check failures, beside the funnel's lower half
     assert t1[0] + t1[2] < edges(t1[1])[0] - 4
-    P.append(f'<path class="cv f-hypotheses-rej" d="M{f(slot[0])},{f(slot[1])} C{f(slot[0] - 10)},{f(slot[1] + 16)} '
-             f'{f(t1[0] + 80)},{f(t1[1] - 18)} {f(t1[0] + 80)},{f(t1[1] - 2)}" marker-end="url(#arr)"/>')
+    P.append(f'<path class="cv f-hypotheses-rej" d="M{f(slot[0])},{f(slot[1])} C{f(slot[0] - 10)},{f(slot[1] + 10)} '
+             f'{f(t1[0] + 76)},{f(t1[1] - 14)} {f(t1[0] + 76)},{f(t1[1] - 2)}" marker-end="url(#arr)"/>')
     P.append(_tray(*t1, t1[0] + 12, t1[1] + 20))
-    rest1 = [(t1[0] + 16 + 18 * (i % 5), t1[1] + 40 + 18 * (i // 5)) for i in range(13)]
+    rest1 = [(t1[0] + 16 + 16 * (i % 5), t1[1] + 40 + 18 * (i // 5)) for i in range(N_HARD)]
+    assert rest1[-1][1] + 8 < t1[1] + t1[3]
     notes = ["no identifier", "→ unknown,", "never a failure"]
     for k, s in enumerate(notes):
-        P.append(f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + 256 + 18 * k}" text-anchor="end">{escape(s)}</text>')
-    assert edges(f0 + 256 - 12)[1] + 4 < 344 - max(map(len, notes)) * 6.8  # the notes clear the funnel's right edge
+        P.append(f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + 202 + 18 * k}" text-anchor="end">{escape(s)}</text>')
+    assert edges(f0 + 202 - 12)[1] + 4 < 344 - max(map(len, notes)) * 6.8  # the notes clear the funnel's right edge
     # panel
-    py = f0 + fh + 60
-    ph = 494
-    lx, ly, lr = 92, py + 104, 58
-    P.append(f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + fh + 22}" text-anchor="end">soft checks only</text>'
-             f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + fh + 40}" text-anchor="end">lower the rank</text>')
-    P.append(f'<path class="cv f-hypotheses-in" d="M180,{f0 + fh} C180,{py - 20} {lx + 20},{py + 10} {lx + 20},{ly - lr - 4}" marker-end="url(#arr)"/>')
+    py = f0 + fh + 52
+    ph = 412
+    lx, ly, lr = 92, py + 104, 56
+    P.append(f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + fh + 26}" text-anchor="end">soft checks only</text>'
+             f'<text class="lbl f-hypotheses-fn" x="344" y="{f0 + fh + 44}" text-anchor="end">lower the rank</text>')
+    P.append(f'<path class="cv f-hypotheses-in" d="M180,{f0 + fh} C180,{py - 16} {lx + 20},{py + 8} {lx + 20},{ly - lr - 4}" marker-end="url(#arr)"/>')
     P.append('<g class="f-hypotheses-lm">' + _panel_head(pre, 16, py, 328, ph, 176, py + 34, ["reviews against", "≤ 8 passages"]))
-    P.append(_lens(pre, lx, ly, lr, (lx + 41, ly + 41, lx + 58, ly + 58)))
-    vx = 178
-    P.append(_verdicts(vx, py + 92, 160, 27))
-    for k, s in enumerate(["“supports” and “disproved” need", "a verbatim quote, else neutral;",
-                           "a quoted “disproved” rejects"]):
-        P.append(f'<text class="lbl f-hypotheses-pl" x="34" y="{py + 290 + 19 * k}">{escape(s)}</text>')
-    P.append(_critic(34, py + 368, 88, 8))
-    P.append(f'<text class="sub f-hypotheses-on" x="34" y="{py + 432}">→ score 1–5</text>'
-             f'<text class="lbl f-hypotheses-pl" x="34" y="{py + 456}">a fatal flaw rejects, unless</text>'
-             f'<text class="lbl f-hypotheses-pl" x="34" y="{py + 475}">none would remain</text></g>')
+    P.append(_lens(pre, lx, ly, lr, (lx + 40, ly + 40, lx + 56, ly + 56)))
+    P.append(_verdicts(178, py + 86, 160, 26))
+    for k, s in enumerate(["“supports”/“disproved” need a verbatim quote,", "else neutral; a quoted “disproved” rejects"]):
+        P.append(f'<text class="lbl f-hypotheses-pl" x="30" y="{py + 262 + 19 * k}">{escape(s)}</text>')
+    P.append(_critic(30, py + 322, 80, 8))
+    P.append(f'<text class="sub f-hypotheses-on" x="{30 + 3 * 88}" y="{py + 351.5}">→ 1–5</text>'
+             f'<text class="lbl f-hypotheses-pl" x="30" y="{py + 384}">a fatal flaw rejects, unless</text>'
+             f'<text class="lbl f-hypotheses-pl" x="30" y="{py + 402}">none would remain</text></g>')
     pb = py + ph
-    out_pts = [(lx - 44, ly + 38), (24, ly + 70), (24, pb)]
-    P.append(f'<path class="cv f-hypotheses-in" d="M{lx - 44},{ly + 38} C30,{ly + 50} 24,{ly + 60} 24,{ly + 80} V{pb}"/>')
-    t2 = (238, pb + 20, 106, 62)
-    rest2 = [(t2[0] + 22 + 20 * i, t2[1] + 42) for i in range(4)]
-    P.append(f'<path class="cv f-hypotheses-rej" d="M24,{pb} C24,{pb + 30} {t2[0] - 30},{t2[1] + 30} {t2[0] - 2},{t2[1] + 30}" marker-end="url(#arr)"/>')
-    P.append(_tray(*t2, t2[0] + 12, t2[1] + 22))
-    # near-duplicates
-    ddx, ddy = 72, pb + 132
-    P.append(f'<path class="cv f-hypotheses-in" d="M24,{pb} V{ddy - 14} Q24,{ddy} 38,{ddy}"/>')
-    P.append(hdr(46, ddy - 44, "NEAR-DUPLICATES") + _dedup(ddx, ddy)
-             + f'<text class="sub" x="{ddx + 46}" y="{ddy + 5}">removed first</text>')
+    out_pts = [(lx - 42, ly + 36), (22, ly + 70), (22, pb)]
+    P.append(f'<path class="cv f-hypotheses-in" d="M{lx - 42},{ly + 36} C28,{ly + 48} 22,{ly + 58} 22,{ly + 78} V{pb}"/>')
+    # review rejects branch right under the panel into tray 2; the lane carries on down to the near-duplicates
+    t2 = (238, pb + 24, 106, 56)
+    br = pb + 46
+    rest2 = [(t2[0] + 22 + 20 * i, t2[1] + 40) for i in range(N_REV)]
+    P.append(f'<path class="cv f-hypotheses-rej" d="M22,{pb} V{br - 10} Q22,{br} 32,{br} H{t2[0] - 2}" marker-end="url(#arr)"/>')
+    P.append(_tray(*t2, t2[0] + 12, t2[1] + 20))
+    ddx, ddy = 72, pb + 92
+    P.append(f'<path class="cv f-hypotheses-in" d="M22,{pb} V{ddy - 14} Q22,{ddy} 36,{ddy}"/>')
+    P.append(hdr(46, pb + 30, "NEAR-DUPLICATES") + f'<text class="sub" x="{ddx + 46}" y="{ddy + 5}">removed first</text>')
     # tournament
-    ty0 = ddy + 100
-    x0, c = 76, 33
-    y0 = ty0 + 32
+    ty0 = ddy + 58
+    x0, c = 76, 30
+    y0 = ty0 + 30
     P.append(hdr(100, ty0, "TOURNAMENT · BLIND"))
     seat_xy = [(x0 - 36, y0 + i * c + c / 2) for i in range(N_SEAT)]
-    P.append(f'<path class="cv f-hypotheses-in" d="M{ddx},{ddy + 20} C{ddx},{ddy + 50} {x0 - 60},{y0 - 20} {x0 - 46},{y0 + 4}" marker-end="url(#arr)"/>')
+    P.append(f'<path class="cv f-hypotheses-in" d="M{ddx},{ddy + 20} C{ddx},{ddy + 44} {x0 - 60},{y0 - 20} {x0 - 46},{y0 + 4}" marker-end="url(#arr)"/>')
     G = {
         "nozzle": lambda g: (315, mids[g]),
         "enter": lambda g, n: _vcurve((315, mids[g]), (330 - ((n * 7) % 9), f0 + 6), 4),
         "check": lambda fate, n: ((rows[fate[1]][0] + 40 + (n * 11) % 30, rows[fate[1]][1] - 4) if fate[0] == "hard"
-                                  else (180 + ((n * 37) % 80 - 40) * (.9 - .4 * ((n % 3) / 2)), f0 + 120 + (n * 23) % 90)),
+                                  else (180 + ((n * 37) % 80 - 40) * (.9 - .4 * ((n % 3) / 2)), f0 + 100 + (n * 23) % 70)),
         "slot": lambda p: _cub(p, (p[0] - 20, p[1] + 10), (slot[0] + 20, slot[1] - 10), slot, 4),
-        "chute": lambda: _cub(slot, (slot[0] - 10, slot[1] + 16), (t1[0] + 80, t1[1] - 18), (t1[0] + 80, t1[1] + 8), 4),
+        "chute": lambda: _cub(slot, (slot[0] - 10, slot[1] + 10), (t1[0] + 76, t1[1] - 14), (t1[0] + 76, t1[1] + 8), 4),
         "rest": lambda i: rest1[i],
         "neck": lambda n: [(176 + (n % 5) * 2, f0 + fh - 4)],
-        "lens_in": lambda spot: _cub((180, f0 + fh), (180, py - 20), (lx + 20, py + 10), spot, 6),
-        "lens_spots": lambda m: _sun(lx, ly, 40, m),
-        "lens_out": lambda spot: [out_pts[0]] + _cub(out_pts[0], (30, ly + 50), (24, ly + 60), (24, ly + 80), 3) + [(24, pb)],
-        "tray2": lambda i: _cub((24, pb), (24, pb + 30), (t2[0] - 30, t2[1] + 30), (t2[0] + 8, t2[1] + 30), 5) + [rest2[i]],
-        "lane": lambda: [(24, ddy - 14), (38, ddy)],
+        "lens_in": lambda spot: _cub((180, f0 + fh), (180, py - 16), (lx + 20, py + 8), spot, 6),
+        "lens_spots": lambda m: _sun(lx, ly, 38, m),
+        "lens_out": lambda spot: [out_pts[0]] + _cub(out_pts[0], (28, ly + 48), (22, ly + 58), (22, ly + 78), 3) + [(22, pb)],
+        "tray2": lambda i: [(22, br - 10), (32, br), (t2[0] + 8, br), rest2[i]],
+        "lane": lambda: [(22, ddy - 14), (36, ddy)],
         "dedup": (ddx, ddy),
-        "seat": lambda s: _cub((ddx, ddy + 20), (ddx, ddy + 50), (x0 - 60, y0 - 20), seat_xy[s], 6),
+        "seat": lambda s: _cub((ddx, ddy + 20), (ddx, ddy + 44), (x0 - 60, y0 - 20), seat_xy[s], 6),
     }
-    parts, seat_t = _particles(G)
-    P.append(_table(x0, y0, c, seat_t))
+    parts, seat_t, dup_t = _particles(G)
+    P.append(_dedup(ddx, ddy, dup_t) + _table(x0, y0, c, seat_t))
     tb = y0 + N_SEAT * c
-    P.append(f'<text class="lbl f-hypotheses-tn" x="16" y="{tb + 26}">deep: similar pairs, ≤ 150 (default)</text>'
-             f'<text class="lbl f-hypotheses-tn" x="16" y="{tb + 45}">blank: not paired</text>')
-    gy = tb + 70
-    P.append(_game(16, gy, 328))
-    P.append(f'<text class="lbl f-hypotheses-tn" x="16" y="{gy + 208}">the judge sees no IDs, generator or lineage</text>')
-    # rank
-    ry = gy + 256
-    P.append(hdr(16, ry, "RANK"))
-    zx, sc, ry0, rp = 196, 44, ry + 34, 48
-    P.append(_axis(zx, sc, ry0 + 2, ry0 + (N_SEAT - 1) * rp + 30, ry0 + (N_SEAT - 1) * rp + 50))
-    P.append(_bars(34, 60, 140, zx, sc, ry0, rp, seat_t, True) + _rank_nums(16, ry0, rp))
-    ly2 = ry0 + (N_SEAT - 1) * rp + 76
-    for k, s in enumerate(["order: gate, critic score, flaws,", "soft checks, then strength",
-                           "log strength · 95 % bootstrap", "interval, 200 resamples"]):
+    P.append(f'<text class="lbl f-hypotheses-tn" x="16" y="{tb + 24}">deep: similar pairs, ≤ 150 (default)</text>'
+             f'<text class="lbl f-hypotheses-tn" x="16" y="{tb + 43}">blank: not paired</text>')
+    gy = tb + 58
+    P.append(_game(16, gy, 328, side=True))
+    P.append(f'<text class="lbl f-hypotheses-tn" x="16" y="{gy + 126}">the judge sees no IDs, generator or lineage</text>')
+    # rank: columns as in the wide variant
+    ry = gy + 168
+    zx, sc, ry0, rp = 250, 31, ry + 50, 28
+    P.append(hdr(16, ry, "RANK")
+             + f'<text class="tag" x="16" y="{ry + 26}">#</text><text class="tag" x="32" y="{ry + 26}">ID</text>'
+             f'<text class="tag" x="86" y="{ry + 26}" text-anchor="middle">CRITIC</text>'
+             f'<text class="tag" x="140" y="{ry + 26}" text-anchor="middle">SOFT</text>'
+             f'<text class="tag" x="{zx}" y="{ry + 26}" text-anchor="middle">LOG STRENGTH</text>')
+    P.append(_axis(zx, sc, ry0 - 18, ry0 + (N_SEAT - 1) * rp + 10, ry0 + (N_SEAT - 1) * rp + 30))
+    P.append(_bars(32, 86, 140, zx, sc, ry0, rp, seat_t) + _rank_nums(16, ry0, rp))
+    ly2 = ry0 + (N_SEAT - 1) * rp + 54
+    for k, s in enumerate(["order: gate, critic score, flaws, soft checks,", "then strength",
+                           "95 % bootstrap interval, 200 resamples"]):
         P.append(f'<text class="lbl" x="16" y="{ly2 + 19 * k}">{escape(s)}</text>')
-    H = ly2 + 19 * 3 + 30 + 26 * len(LEGEND) + 22
+    H = ly2 + 68 + 26 * 3 + 10
+    rows_lg = [LEGEND[:2], LEGEND[2:3], [("dash", "failed: excluded")]]
     P.append(f'<g filter="url(#{pre}-glow)">{parts}</g>')
-    P.append("".join(legend([it], 16, H - 34 - 26 * (len(LEGEND) - 1 - k)) for k, it in enumerate(LEGEND))
-             + note(16, H - 8))
+    P.append("".join(legend(r, 16, ly2 + 68 + 26 * k) for k, r in enumerate(rows_lg)) + note(16, H - 8))
     return svg(W, H, "".join(P), "narrow", LABEL), seat_t
 
 
@@ -695,7 +699,7 @@ JS = """MAFig.register("hypotheses", function (root, variant) {
   var at = function (el) { return +el.getAttribute("data-t"); };
   var parts = q(".f-hypotheses-pt"), flash = q(".f-hypotheses-fl"), glow = q(".f-hypotheses-nglow"),
     rows = q(".f-hypotheses-row"), bars = q(".f-hypotheses-bar"), scan = root.querySelector(".f-hypotheses-scan"),
-    gc = q(".f-hypotheses-gc"), dd = root.querySelector(".f-hypotheses-ddp");
+    gc = q(".f-hypotheses-gc"), goes = q(".f-hypotheses-go");
   // shown in the finished frame, hidden until the step that decides them
   var shown = q(".f-hypotheses-frame, .f-hypotheses-out, .f-hypotheses-ci, .f-hypotheses-rk, .f-hypotheses-qh");
   gsap.set(bars, {svgOrigin: function (i, el) { return el.getAttribute("data-z") + " 0"; }});
@@ -716,28 +720,28 @@ JS = """MAFig.register("hypotheses", function (root, variant) {
       tl.fromTo(p, {x: w[0][1], y: w[0][2], opacity: 0}, {x: w[0][1], y: w[0][2], opacity: 1, duration: .12}, t0 + w[0][0])
         .fromTo(c, {opacity: 1}, {opacity: 1, duration: .01}, t0 + w[0][0])
         .fromTo(a, {opacity: 0}, {opacity: 0, duration: .01}, t0 + w[0][0]);
-      pulse(tl, glow[+p.getAttribute("data-g")], t0 + w[0][0] - .05, .3);
+      pulse(tl, glow[+p.getAttribute("data-g")], t0 + w[0][0] - .05, .15);
       for (var i = 1; i < w.length; i++) {
         tl.to(p, {x: w[i][1], y: w[i][2], duration: w[i][0] - w[i - 1][0], ease: i === w.length - 1 ? "power2.out" : "none"}, t0 + w[i - 1][0]);
       }
       if (ta) {
         tl.fromTo(a, {opacity: 0}, {opacity: 1, duration: .15}, t0 + +ta).fromTo(c, {opacity: 1}, {opacity: 0, duration: .15}, t0 + +ta);
-        if (r !== null) pulse(tl, flash[+r], t0 + +ta);
+        if (r !== null) pulse(tl, flash[+r], t0 + +ta, .2);
       }
-      if (to) { tl.to(p, {opacity: 0, duration: .3}, t0 + +to); pulse(tl, dd, t0 + +to - .1); }
+      if (to) tl.to(p, {opacity: 0, duration: .3}, t0 + +to);
     });
     // the lens scans, the verdicts and the critic's flaws light as they are given
     tl.fromTo(scan, {y: 0, opacity: 0}, {y: 0, opacity: 1, duration: .2}, t0 + at(scan))
       .to(scan, {y: +scan.getAttribute("data-dy"), duration: __SCAN__, ease: "sine.inOut"}, t0 + at(scan))
       .to(scan, {opacity: 0, duration: .2}, t0 + at(scan) + __SCAN__);
-    q(".f-hypotheses-vp, .f-hypotheses-cs, .f-hypotheses-sockp").forEach(function (el) { pulse(tl, el, t0 + at(el)); });
+    q(".f-hypotheses-vp, .f-hypotheses-cs, .f-hypotheses-sockp, .f-hypotheses-ddp").forEach(function (el) { pulse(tl, el, t0 + at(el)); });
     shown.forEach(function (el) { tl.fromTo(el, {opacity: 0}, {opacity: 1, duration: .25}, t0 + at(el)); });
     q(".f-hypotheses-swap").forEach(function (el) { pulse(tl, el, t0 + at(el) - .3); });
     // one game: the two candidates swap slots between the judge's two calls
-    q(".f-hypotheses-go").forEach(function (el) { tl.fromTo(el, {opacity: .35}, {opacity: 1, duration: .3}, t0 + at(el)); });
+    goes.forEach(function (el) { tl.fromTo(el, {opacity: .35}, {opacity: 1, duration: .3}, t0 + at(el)); });
     gc.forEach(function (el) {
-      tl.fromTo(el, {x: 0}, {x: +el.getAttribute("data-dx"), duration: .4, ease: "power2.inOut"}, t0 + __G0__ + .5)
-        .to(el, {x: 0, duration: .4, ease: "power2.inOut"}, t0 + __G0__ + 1.6);
+      tl.fromTo(el, {x: 0}, {x: +el.getAttribute("data-dx"), duration: .4, ease: "power2.inOut"}, t0 + __SWAP__)
+        .to(el, {x: 0, duration: .4, ease: "power2.inOut"}, t0 + __BACK__);
     });
     // leaderboard: rows appear in seat order, bars grow, then the rows settle into the final order
     rows.forEach(function (el) {
@@ -767,12 +771,13 @@ JS = """MAFig.register("hypotheses", function (root, variant) {
   loop.to(parts, {opacity: 0, duration: .5}, __HOLD__)
     .to(shown, {opacity: 0, duration: .5}, __HOLD__)
     .to(rows, {opacity: 0, duration: .5}, __HOLD__)
-    .to(bars, {scaleX: 0, duration: .5}, __HOLD__);
+    .to(bars, {scaleX: 0, duration: .5}, __HOLD__)
+    .to(goes, {opacity: .35, duration: .5}, __HOLD__);
   pass(loop, __T0L__);
   loop.set({}, {}, __TL__);
   return {intro: intro, loop: loop};
 });"""
-JS = (JS.replace("__SCAN__", str(SCAN)).replace("__G0__", str(G0)).replace("__SORT__", str(SORT_T))
+JS = (JS.replace("__SCAN__", str(SCAN)).replace("__SWAP__", str(GAME_T["swap"])).replace("__BACK__", str(GAME_T["back"])).replace("__SORT__", str(SORT_T))
       .replace("__T0I__", str(T0_INTRO)).replace("__T0L__", str(round(T0_LOOP, 3))).replace("__HOLD__", str(HOLD))
       .replace("__TL__", str(T_LOOP)))
 
