@@ -44,29 +44,35 @@ STEPS = [("Baseline", "measured first", ""), ("12 candidates", "proposed by a mo
 DESC_W = ["“read relaxed", "energies from", "VASP OUTCAR", "files”"]
 DESC_N = ["“read relaxed", "energies from VASP", "OUTCAR files”"]
 SOURCES = ["registry", "PyPI", "GitHub"]
-LIBS = [("pymatgen", "REGISTRY", .92), ("ase", "PYPI", .81), ("catkit", "GITHUB", .74)]  # merged, ranked by relevance
+LIBS = [("pymatgen", "REGISTRY", .92), ("ase", "REGISTRY", .81), ("catkit", "GITHUB", .74)]  # merged, ranked by relevance
+# (PyPI looks up exact query words only, so this query finds nothing there that ranks; search/pypi.py:30-31)
 KW = ("def", "for", "if", "in", "return", "assert", "and")
 CODE = [(0, "def read_energies(path):"), (1, "out = []"), (1, "for ln in open(path):"), (2, 'if "sigma->0" in ln:'),
         (3, "e = ln.split()[-1]"), (3, "out.append(float(e))"), (1, "return out")]
-TEST = [(0, "def test_read_energies():"), (1, "e = read_energies(OUTCAR)"), (1, "assert e and e[-1] < 0")]
+TEST = [(0, "def test_read_energies():"), (1, 'e = read_energies("OUTCAR")'), (1, "assert e and e[-1] < 0")]
 CHECKS = ["syntax", "imports", "types", "lint", "contract"]
+N_DEF = 2  # syntax and imports run by default; types, lint and contract only in strict mode (C43)
 ARS = 63
 WEIGHTS = [("syntax", ".2", .2), ("imports", ".2", .2), ("tests", ".3", .3), ("lint", ".15", .15), ("types", ".15", .15)]
 ISLES, PER_ISLE = 5, 9  # 45 new programs over the 50 iterations shown (illustrative sample)
 
 # --- timing (s, within one pass) --------------------------------------------------------------------------------------
-T_BASE, T_CAND, CAND_ST = 0, .45, .03
-SEG = [(.8, .9), (2.0, .9), (3.2, .9)]  # stage progress: start, duration
-T_D1, T_MV2, T_D2, T_HB, T_MARG, T_MV3 = 1.8, 2.0, 3.0, 3.1, 3.5, 3.2
-T_CI = SEG[2][0] + SEG[2][1] + .05  # holdout scored first
-T_HALO, T_WAIT, T_OK, T_ACT = T_CI + .5, T_CI + .8, T_CI + 2.15, T_CI + 2.45
+T_BASE, T_CAND, CAND_ST = 0, .45, .03  # candidates appear unscored, on a row of their own
+SEG = [(.8, .9), (2.2, .9), (3.6, .9)]  # stage progress: start, duration
+MV_D = .4
+MV = [a + d for a, d in SEG]  # a stage's scores land only when that stage has finished
+T_D1, T_D2 = MV[0] + MV_D + .05, MV[1] + MV_D + .05  # then its decision: the dropped fade, the holdout picks turn teal
+T_HB, T_MARG = SEG[2][0], SEG[2][0] + .4  # holdout starts: the baseline line moves to its holdout mean, the band shows
+T_CI = MV[2] + MV_D + .05  # CIs after the holdout scores have landed
+T_HALO, T_WAIT, T_OK, T_ACT = T_CI + .5, T_CI + .8, T_CI + 1.9, T_CI + 2.2
+DIM = .18  # dropped candidates fade this far
 T_SRC = [.2, .35, .5]
 T_LIB = [.8, .95, 1.1]
 T_TYPE, LINE_D, LINE_GAP = 1.4, .2, .03
 N_LINES = len(CODE) + len(TEST)
 T_CHK = T_TYPE + N_LINES * (LINE_D + LINE_GAP) + .15
 CHK_ST = .22
-T_RUN = T_CHK + len(CHECKS) * CHK_ST + .1  # the isolated runner works only after inspection passed
+T_RUN = T_CHK + N_DEF * CHK_ST + .1  # the isolated runner works only after inspection passed
 T_TESTS = T_RUN + .6
 T_STAGED, T_EVT, T_EVS = T_TESTS + .25, T_TESTS + .25, T_TESTS + .45
 T_FILL, FILL_D = T_EVS + .3, .7
@@ -77,7 +83,7 @@ PASS = max(T_READ, T_ACT, T_BEST) + .35
 T0_INTRO, HOLD_T, T0_LOOP = 1.3, 1.5, 2.2
 T_LOOP = T0_LOOP + PASS + .1
 assert T0_INTRO + PASS <= 10 and T_LOOP <= 10, (PASS, T_LOOP)
-assert T_CAND > T_BASE and T_D1 >= SEG[0][0] + SEG[0][1] and T_D2 >= SEG[1][0] + SEG[1][1] and T_HB >= T_D2
+assert T_CAND > T_BASE and T_CAND + 11 * CAND_ST < MV[0] and T_D1 < SEG[1][0] and T_D2 <= T_HB and T_CI > MV[2] + MV_D
 assert T_CHK > T_TYPE + N_LINES * (LINE_D + LINE_GAP) and T_TYPE > max(T_LIB)
 
 
@@ -134,6 +140,8 @@ def _plot(v, x0, y0, x1, y1, cx, win_lbl, clabels):
             ("holdout mean", Y(BASE_HOLD) + 16, _at("hbl", T_MARG)), ("+ margin", Y(BASE_HOLD + MARGIN) - 6, _at("mlbl", T_MARG))]
     for s, y, a in labs:
         P.append(_txt("lbl amb", xr, y, s, "end", a))
+    yu = y1 - (14 if v == "wide" else 12)  # the unscored row
+    P.append(_txt("lbl", xr, yu + 4, "unscored", "end", f'data-w="{_tv(T_CAND)} {_tv(MV[0] + .2)}" opacity="0"'))
     zone = xr - max(len(s) for s, _y, _a in labs) * lw
     assert cx(11) + 6 + 6 <= zone, (cx(11), zone)
     for i in range(12):
@@ -142,7 +150,8 @@ def _plot(v, x0, y0, x1, y1, cx, win_lbl, clabels):
         y_2 = (Y(S2[i]) - yf) if i in S2 else y_1
         dim = {0: T_D1, 1: T_D2}.get(KIND[i])
         P.append(f'<g class="f-improvement-cand" data-k="{KIND[i]}" {_at("cand", T_CAND + i * CAND_ST)} '
-                 f'data-y="{f(y_1)} {f(y_2)}"' + (f' data-dim="{_tv(dim)}" opacity=".3"' if dim else "") + '>'
+                 f'data-y="{f(yu - yf)} {f(y_1)} {f(y_2)}" data-mv="{" ".join(_tv(m) for m in MV)}"'
+                 + (f' data-dim="{_tv(dim)}" opacity="{DIM}"' if dim else "") + '>'
                  f'<circle class="f-improvement-dot" cx="{f(x)}" cy="{f(yf)}" r="{6 if v == "wide" else 5}"/>'
                  + (f'<circle class="f-improvement-on" cx="{f(x)}" cy="{f(yf)}" r="{6 if v == "wide" else 5}" {_at("on", T_D2)}/>'
                     if KIND[i] == 2 else "") + '</g>')
@@ -257,23 +266,21 @@ def _code(x_num, x, y, pitch, lines, n0, cw, pre):
     return "".join(P)
 
 
-def _checks(x, y, pitch, cols, v):
-    """Inspection checks on the panel: a hollow badge each, ticked in order."""
-    P = []
-    for j, s in enumerate(CHECKS):
-        c, r = divmod(j, cols[0]) if len(cols) > 1 else (0, j)
-        xx = x + (cols[1 + c] if len(cols) > 1 else 0)
-        yy = y + r * pitch
-        P.append(f'<circle class="f-improvement-bdg" cx="{f(xx + 7)}" cy="{f(yy - 4.5)}" r="7"/>'
-                 + _txt("sub f-improvement-pi", xx + 21, yy, s)
-                 + _tick(xx + 7, yy - 4.5, 7, "f-improvement-ck", _at("chk", T_CHK + j * CHK_ST)))
+def _checks(pos, strict_at):
+    """Inspection checks on the panel: syntax and imports ticked in order; types, lint and contract under "strict mode"
+    with dashed badges, never ticked (strict validation is off by default, C43)."""
+    P = [_txt("sub f-improvement-pm", *strict_at, "strict mode")]
+    for j, (s, (x, y)) in enumerate(zip(CHECKS, pos)):
+        P.append(f'<circle class="f-improvement-bdg{"" if j < N_DEF else " sd"}" cx="{f(x + 7)}" cy="{f(y - 4.5)}" r="7"/>'
+                 + _txt("sub f-improvement-pi" if j < N_DEF else "sub f-improvement-pm", x + 21, y, s)
+                 + (_tick(x + 7, y - 4.5, 7, "f-improvement-ck", _at("chk", T_CHK + j * CHK_ST)) if j < N_DEF else ""))
     return "".join(P)
 
 
 def _runner(x, y, w, h, v, sub_x, sub_dy):
     """The isolated runner: only after inspection passed do the module's own tests run in it."""
     assert len("ISOLATED RUNNER") * TW[v] + 12 <= w
-    ty = y + 42
+    ty = y + 40
     return (f'<rect class="f-improvement-run" x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="8"/>'
             f'<rect class="f-improvement-runw" x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="8" '
             f'data-w="{_tv(T_RUN)} {_tv(T_TESTS)}" opacity="0"/>'
@@ -365,9 +372,11 @@ def _islands(cx, cy, rx, ry, R, v):
             dots.append((k, px, py, fit))
             if best is None or fit > best[3]:
                 best = (k, px, py, fit, i)
+    P.append('<g class="f-improvement-p">')  # one class on the group keeps the 45 dots lean
     for k, px, py, fit in sorted(dots):
         t = T_IT + (k + 1) / (ISLES * PER_ISLE) * IT_D - .05
-        P.append(f'<circle class="f-improvement-p" cx="{f(px)}" cy="{f(py)}" r="3.2" {_at("p", t)}/>')
+        P.append(f'<circle cx="{f(px)}" cy="{f(py)}" r="3.2" data-t="{_tv(t)}"/>')
+    P.append('</g>')
     _k, bx, by, _f, bi = best
     assert bi == 0  # the label sits above the top island
     pts = " ".join(f"{f(bx + (8 if q % 2 == 0 else 3.4) * math.cos(math.radians(-90 + 36 * q)))},"
@@ -377,8 +386,8 @@ def _islands(cx, cy, rx, ry, R, v):
 
 
 def _legend_items():
-    return [("dot", "on holdout"), ("amber", "baseline · approval wait"), ("okc", "check passed"),
-            ("dash", "separate step")]
+    return [("dot", "on holdout"), ("hdot", "dropped"), ("amber", "baseline · waiting"), ("okc", "check passed"),
+            ("isle", "program"), ("dash", "separate step")]
 
 
 LABEL = ("Two panels; values are illustrative. (a) An improvement run measures a baseline, then a language model proposes "
@@ -389,9 +398,10 @@ LABEL = ("Two panels; values are illustrative. (a) An improvement run measures a
          "after an administrator approves it. For DISCOVER's own code-generation program, approval instead writes one "
          "commit on a new local git branch, never pushed; that target runs on macOS only. (b) From a plain-language "
          "description, here a reader for energies in VASP OUTCAR files, DISCOVER first searches a curated registry, PyPI "
-         "and GitHub for existing libraries and ranks them by relevance, then writes a module with its tests. Syntax, "
-         "import, type, lint and contract checks run, then the module's own tests run in an isolated runner, macOS "
-         "sandbox-exec or a container; the checks show that the code runs and passes its tests, not that it is correct. "
+         "and GitHub for existing libraries and ranks them by relevance, then writes a module with its tests. Syntax and "
+         "import checks run, and type, lint and contract checks too in strict mode, which is off by default; then the "
+         "module's own tests run in an isolated runner, macOS sandbox-exec or a container. The checks show that the code "
+         "runs and passes its tests, not that it is correct. "
          "Only then are the files written to staging; promotion into the live system is a separate step that needs passed "
          "tests. A readiness score, ARS, 0–100, is reported only when test and security results back it. OpenEvolve, "
          "SE 7.4, which needs an Anthropic API key, evolves code over five island populations for 50 iterations by "
@@ -440,8 +450,8 @@ def _wide():
     assert 464 + max(len(s) + 4 * i for i, s in CODE + TEST) * cw <= 716
     P.append(f'<rect class="f-improvement-caret" x="0" y="0" width="7" height="15" opacity="0"/>')
     P.append(hdr(742, by0 + 22, "CHECKS").replace('class="hdr"', 'class="hdr f-improvement-pm"'))
-    P.append(_checks(742, 532, 24, (0,), v))
-    P.append(_runner(734, 644, 152, 100, v, 742, (20, 38)))
+    P.append(_checks([(742, 530), (742, 553), (742, 600), (742, 621), (742, 642)], (742, 579)))
+    P.append(_runner(734, 656, 152, 88, v, 742, (18, 36)))
     # staging, promotion, readiness
     rx, rw = 912, 158
     P.append(_staging(rx, 486, rw, v))
@@ -454,7 +464,7 @@ def _wide():
     P += [hdr(30, 790, "OPENEVOLVE · SE 7.4"), _txt("lbl", 30, 812, "needs an Anthropic API key")]
     P.append(_fitness(30, 844, 350, v))
     P.append(_iters(30, 926, 350))
-    P.append(_txt("lbl", 30, 990, "starts from a catalogued or new module"))
+    P.append(_txt("lbl", 30, 990, "here from a catalogued module"))
     isl, cen, (bx, by) = _islands(740, 902, 250, 64, 54, v)
     P.append(isl)
     P.append(_txt("sub", 740, 774, "best → module catalog", "middle", _at("best", T_BEST)))
@@ -509,7 +519,7 @@ def _narrow():
     test0 = th + 22
     chk_hdr = test0 + 18 * (len(TEST) - 1) + 38
     chk0 = chk_hdr + 26
-    run0 = chk0 + 2 * 24 + 6
+    run0 = chk0 + 3 * 24 + 6
     by1 = run0 + 74 + 12
     P.append(f'<rect class="panel f-improvement-hous" x="12" y="{by0}" width="336" height="{by1 - by0}" rx="16" style="fill:url(#{pre}-pnl)"/>')
     P.append("".join(f'<circle class="f-improvement-dt" cx="{28 + 12 * k}" cy="{by0 + 16}" r="3.5"/>' for k in range(3)))
@@ -521,7 +531,7 @@ def _narrow():
     assert 54 + max(len(s) + 4 * i for i, s in CODE + TEST) * cw <= 340
     P.append(f'<rect class="f-improvement-caret" x="0" y="0" width="7.5" height="16" opacity="0"/>')
     P.append(hdr(28, chk_hdr, "CHECKS").replace('class="hdr"', 'class="hdr f-improvement-pm"'))
-    P.append(_checks(28, chk0, 24, (3, 0, 168), v))
+    P.append(_checks([(28, chk0 + 24), (28, chk0 + 48), (168, chk0 + 24), (168, chk0 + 48), (168, chk0 + 72)], (168, chk0)))
     P.append(_runner(24, run0, 312, 74, v, 168, (0, 18)))
     # staging + live (left), readiness (right)
     sy = by1 + 32
@@ -534,9 +544,10 @@ def _narrow():
     # OpenEvolve
     oy = sy + 102 + 52 + 40
     P += [hdr(12, oy, "OPENEVOLVE · SE 7.4"), _txt("lbl", 12, oy + 22, "needs an Anthropic API key")]
-    P.append(_fitness(12, oy + 52, 336, v))
-    P.append(_iters(12, oy + 132, 336))
-    ry = oy + 288
+    P.append(_txt("lbl", 12, oy + 42, "here from a catalogued module"))
+    P.append(_fitness(12, oy + 72, 336, v))
+    P.append(_iters(12, oy + 152, 336))
+    ry = oy + 308
     isl, cen, _b = _islands(180, ry, 118, 62, 33, v)
     P.append(_txt("sub", 180, ry - 62 - 33 - 12, "best → module catalog", "middle", _at("best", T_BEST)))
     P.append(isl)
@@ -544,8 +555,8 @@ def _narrow():
     P.append(_txt("lbl", 180, yl, "each dot a program;", "middle") + _txt("lbl", 180, yl + 18, "summit = higher fitness", "middle"))
     lg = yl + 52
     items = _legend_items()
-    rows = [[items[0], items[2]], [items[1]], [items[3]]]
-    P.append("".join(legend(r, 12, lg + 26 * k) for k, r in enumerate(rows)) + note(12, lg + 78))
+    rows = [items[:2], [items[3], items[5]], [items[2]], [items[4]]]
+    P.append("".join(legend(r, 12, lg + 26 * k) for k, r in enumerate(rows)) + note(12 + 30 + 57 + 22 + 20, lg + 78))
     return svg(W, round(lg + 78 + 14), "".join(P), v, LABEL)
 
 
@@ -563,14 +574,15 @@ JS = """MAFig.register("improvement", function (root, variant) {
     tl.set(base, {y: +base.getAttribute("data-hb")}, t0).to(base, {y: 0, duration: .4, ease: "power2.inOut"}, t0 + __HB__);
     cands.forEach(function (c) {
       var y = c.getAttribute("data-y").split(" "), k = +c.getAttribute("data-k");
-      tl.set(c, {y: +y[0]}, t0);
-      if (k > 0) tl.to(c, {y: +y[1], duration: .6, ease: "power2.inOut"}, t0 + __MV2__);
-      if (k > 1) tl.to(c, {y: 0, duration: .6, ease: "power2.inOut"}, t0 + __MV3__);
+      var mv = c.getAttribute("data-mv").split(" ");  // each stage's scores land when that stage has finished
+      tl.set(c, {y: +y[0]}, t0).to(c, {y: +y[1], duration: __MVD__, ease: "power2.inOut"}, t0 + +mv[0]);
+      if (k > 0) tl.to(c, {y: +y[2], duration: __MVD__, ease: "power2.inOut"}, t0 + +mv[1]);
+      if (k > 1) tl.to(c, {y: 0, duration: __MVD__, ease: "power2.inOut"}, t0 + +mv[2]);
     });
     timed.forEach(function (el) {
       var t = t0 + +el.getAttribute("data-t");
       tl.fromTo(el, {opacity: 0}, {opacity: 1, duration: .3}, t);
-      if (el.hasAttribute("data-dim")) tl.to(el, {opacity: .3, duration: .3}, t0 + +el.getAttribute("data-dim"));
+      if (el.hasAttribute("data-dim")) tl.to(el, {opacity: __DIM__, duration: .3}, t0 + +el.getAttribute("data-dim"));
       if (el.classList.contains("f-improvement-ci")) tl.fromTo(el, {scaleY: 0}, {scaleY: 1, duration: .45, ease: "power2.out"}, t);
       var dr = el.querySelectorAll(".f-improvement-dr");
       if (dr.length) tl.fromTo(dr, {drawSVG: "0%"}, {drawSVG: "100%", duration: .35}, t + .1);
@@ -602,6 +614,7 @@ JS = """MAFig.register("improvement", function (root, variant) {
     .from(q(".f-improvement-wt, .f-improvement-mtr, .f-improvement-dt, .f-improvement-bdg, .f-improvement-run"), {opacity: 0, duration: .4, stagger: .01}, .5)
     .set(shown, {opacity: 0}, 0)
     .set(wipes, {attr: {width: 0}}, 0)
+    .set(cands, {y: function (i, c) { return +c.getAttribute("data-y").split(" ")[0]; }}, 0)
     .set(draws, {drawSVG: "0%"}, 0);
   pass(intro, __T0I__);
   // loop: hold the finished frame, clear what the pass reveals (shown, typed lines, drawn bars), run again.
@@ -614,7 +627,7 @@ JS = """MAFig.register("improvement", function (root, variant) {
   loop.set({}, {}, __TL__);
   return {intro: intro, loop: loop};
 });"""
-for _k, _v in {"__HB__": T_HB, "__MV2__": T_MV2, "__MV3__": T_MV3, "__LINED__": LINE_D,
+for _k, _v in {"__HB__": T_HB, "__MVD__": MV_D, "__DIM__": DIM, "__LINED__": LINE_D,
                "__TYPEEND__": T_TYPE + N_LINES * (LINE_D + LINE_GAP), "__T0I__": T0_INTRO, "__HOLD__": HOLD_T,
                "__T0L__": T0_LOOP, "__TL__": T_LOOP}.items():
     JS = JS.replace(_k, _tv(_v))

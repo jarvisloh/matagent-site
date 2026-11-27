@@ -119,6 +119,8 @@ _SWATCH = {
     "okc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-okc"/><path d="M{x + 6.5},-3.5 l3,3 l5.5,-6.5" class="lg-tick"/>',
     "ring": lambda x: f'<circle cx="{x + 11}" cy="-4" r="4.5" class="lg-ring"/>',
     "dia": lambda x: f'<path d="M{x + 11},-11 l7,7 l-7,7 l-7,-7 z" class="lg-dia"/>',
+    "hdot": lambda x: f'<circle cx="{x + 11}" cy="-4" r="5" class="lg-hdot"/>',
+    "isle": lambda x: f'<ellipse cx="{x + 11}" cy="-4" rx="11" ry="8" class="lg-isle"/><circle cx="{x + 11}" cy="-4" r="3" class="lg-dot"/>',
     "xc": lambda x: f'<circle cx="{x + 11}" cy="-4" r="9" class="lg-xc"/><path d="M{x + 7.5},-7.5 l7,7 M{x + 14.5},-7.5 l-7,7" class="lg-x"/>',
 }
 

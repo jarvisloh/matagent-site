@@ -1028,13 +1028,26 @@ class SiteTests(unittest.TestCase):
                          ("ok", "active"), ("lib", "code"), ("code", "chk"), ("chk", "tests"), ("tests", "staged"),
                          ("tests", "evid"), ("evid", "fill"), ("fill", "read"), ("prog", "best")):
                 self.assertLess(t[a], t[b], (v, a, b))
+            # each stage's scores land only after that stage's progress segment has finished (C69)
+            segs = [float(a) + float(d) for a, d in re.findall(r'data-e="seg" data-t="([\d.]+)" data-dd="([\d.]+)"', body)]
+            mv = [float(x) for x in re.search(r'class="f-improvement-cand"[^>]*data-mv="([\d. ]+)"', body).group(1).split()]
+            self.assertEqual(len(segs), 3, v)
+            for end, m in zip(segs, mv):
+                self.assertLessEqual(round(end, 2), m, v)
+            self.assertLess(max(float(x) for x in re.findall(r'class="f-improvement-cand"[^>]*data-t="([\d.]+)"', body)), mv[0], v)
+            self.assertLess(mv[2], t["ci"], v)
+            # strict-only checks are never ticked in the default pass (C43): two ticks, three dashed badges
+            self.assertEqual(body.count('data-e="chk"'), 2, v)
+            self.assertEqual(body.count('class="f-improvement-bdg sd"'), 3, v)
+            self.assertIn("strict mode", shown, v)
+            self.assertIn("strict mode", label, v)
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
             self.assertNotRegex(body, r"<animate|[Vv]alidat|[Mm]igrat")
             self.assertNotIn("{", body)
         self.assertRegex(css(), r"\.f-improvement-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
         allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
-        for cid in ("C30", "C31", "C32", "C48", "C54", "C67", "C69", "C70", "C71"):
+        for cid in ("C30", "C31", "C32", "C43", "C48", "C54", "C67", "C69", "C70", "C71", "C72"):
             self.assertIn(cid, allc)
         self.assertNotRegex(html.unescape(re.sub(r"<[^>]+>", " ", sec)), r"[Vv]alidat|[Mm]igrat")
         js = re.search(r'MAFig\.register\("improvement".*?<!-- figjs:improvement:end -->', self._script("figjs"), flags=re.S)
