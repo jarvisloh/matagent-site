@@ -623,6 +623,43 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    def test_fig_hypotheses(self):
+        self.assertEqual(EXPECTED_SECTIONS.index("hypotheses"), EXPECTED_SECTIONS.index("gaps") + 1)
+        sec = re.search(r'<section id="hypotheses".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Formulates hypotheses</h2>", sec)
+        fig = re.search(r'<figure class="fig" data-fig="hypotheses" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for word in ("seven", "hard check", "quote", "both presentation orders", "Bradley–Terry", "bootstrap"):
+                self.assertIn(word, label.group(1), (v, word))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)  # entrants, games and strengths are illustrative
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the reviewing language model
+            self.assertEqual(body.count('class="card f-hypotheses-gen"'), 7, v)  # all seven generators (C56)
+            self.assertLessEqual(body.count('class="f-hypotheses-pt"'), 60, v)  # swarm budget
+            for part in ("f-hypotheses-funnel", "f-hypotheses-tray", "f-hypotheses-lens", "f-hypotheses-game",
+                         "f-hypotheses-bar", "f-hypotheses-ci"):
+                self.assertIn(part, body, (v, part))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+        self.assertNotIn("Up to four generators", sec)
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 6)
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        self.assertIn("C56", " ".join(cards))  # the seven-generator card (assumed)
+        js = re.search(r'MAFig\.register\("hypotheses".*?<!-- figjs:hypotheses:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
         p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"

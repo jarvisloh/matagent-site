@@ -90,6 +90,7 @@ _SWATCH = {
     "flow": lambda x: f'<path d="M{x},-4 h22" class="lg-flow"/>',
     "amber": lambda x: f'<path d="M{x},-4 h22" class="lg-amber"/>',
     "dot": lambda x: f'<circle cx="{x + 4}" cy="-4" r="4" class="lg-dot"/>',
+    "adot": lambda x: f'<circle cx="{x + 4}" cy="-4" r="4" class="lg-adot"/>',
     "dash": lambda x: f'<path d="M{x},-4 h22" class="lg-dash"/>',
     "hex": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hex"/>',
     "hexdash": lambda x: f'<path d="{flathex(x + 11, -4, 8)}" class="lg-hexdash"/>',
