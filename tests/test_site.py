@@ -208,7 +208,7 @@ class SiteTests(unittest.TestCase):
     def test_dash_not_edge(self):
         # dashed connectors never take pathLength (it rescales the dash) and never share the edge draw-in
         tags = re.findall(r"<[a-z]+\b[^>]*class=\"[^\"]*\bdash\b[^>]*>", PAGE)
-        self.assertTrue(tags)  # the literature figure's opt-in branch is dashed
+        self.assertTrue(tags)  # the remaining SMIL figures still use dashed connectors
         self.assertNotRegex(PAGE, r'class="[^"]*\bedge (opt|rej)\b')
         for tag in tags:
             self.assertNotRegex(tag, r'class="[^"]*\bedge\b')
@@ -548,6 +548,41 @@ class SiteTests(unittest.TestCase):
         self.assertTrue(js)
         self.assertRegex(js.group(0), r"\{scrub: true\}\);\s*<!-- figjs:modules:end -->")
         self.assertIn('closest("section").querySelectorAll(".cards .card")', js.group(0))  # group cards stagger in
+
+    def test_fig_literature(self):
+        self.assertEqual(EXPECTED_SECTIONS.index("literature"), EXPECTED_SECTIONS.index("modules") + 1)
+        sec = re.search(r'<section id="literature".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Reads the literature</h2>", sec)
+        fig = re.search(r'<figure class="fig" data-fig="literature" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for word in ("BM25", "page images", "graph neural network", "[p. N]"):
+                self.assertIn(word, label.group(1), (v, word))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)  # BM25 scores are illustrative
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the language model
+            for part in ("f-literature-beam", "f-literature-bar", "f-literature-lens", "f-literature-hop", "f-literature-answer"):
+                self.assertIn(part, body, (v, part))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat|opt-in")
+        self.assertNotIn("opt-in", sec)  # page images are read by default (C47, C53)
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 6)  # papers, text, page images, knowledge graph, knowledge base, Deep Research
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        for cid in ("C47", "C49", "C53"):
+            self.assertIn(cid, " ".join(cards))
+        js = re.search(r'MAFig\.register\("literature".*?<!-- figjs:literature:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
