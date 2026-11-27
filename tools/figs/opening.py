@@ -37,7 +37,7 @@ def _memkey(x, y):
             '<text x="30" y="0">shared memory</text></g>')
 
 
-def _flower(pre, cx, cy, R, gap, ring, tick, core_sub):
+def _flower(pre, cx, cy, R, gap, core_r, ring, tick):
     """Dial, sweep wedge, six cells and the dark core. Returns markup; cells carry data-dx/dy (offset from the core)."""
     D = math.sqrt(3) * (R + gap)
     P = [f'<defs><radialGradient id="{pre}-core" cx="50%" cy="42%" r="62%"><stop offset="0" class="f-opening-g0"/>'
@@ -58,25 +58,26 @@ def _flower(pre, cx, cy, R, gap, ring, tick, core_sub):
         hx, hy = _pt(cx, cy, D, ang)
         mem = " f-opening-mem" if ttl == "MEMORY" else ""
         title = ttl if mem else f'<tspan class="f-opening-cap">{ttl[0]}</tspan>{ttl[1:]}'
-        # narrow hexes are too slim for a 14-character sub-label at 12 px, so it stacks at the " · "
-        iy, ty_, lines = (hy - 46, hy + 4, [(sub, hy + 24)]) if wide else (hy - 44, hy - 4, list(zip(sub.split(" · "), (hy + 17, hy + 34) if " · " in sub else (hy + 22,))))
+        # narrow hexes are too slim for a 14-character sub-label at 13.4 units, so it stacks at the " · "
+        iy, ty_, lines = (hy - 48, hy + 4, [(sub, hy + 26)]) if wide else (hy - 46, hy - 4, list(zip(sub.split(" · "), (hy + 17, hy + 36) if " · " in sub else (hy + 24,))))
         subs = "".join(f'<text class="sub" x="{f(hx)}" y="{f(y)}" text-anchor="middle">{escape(t)}</text>' for t, y in lines)
         P.append(f'<g class="f-opening-cell{mem}" data-dx="{f(hx - cx)}" data-dy="{f(hy - cy)}">'
                  f'<path class="hx" d="{hexpath(hx, hy, R)}"/>{icon(ic, hx - 9, iy)}'
                  f'<text class="f-opening-hxt" x="{f(hx)}" y="{f(ty_)}" text-anchor="middle">{title}</text>{subs}'
                  f'<path class="f-opening-trace" d="{hexpath(hx, hy, R)}" opacity="0"/></g>')
-    subs = "".join(f'<text class="sub f-opening-on" x="{cx}" y="{f(y)}" text-anchor="middle">{escape(s)}</text>'
-                   for s, y in core_sub)
+    # "chat agent · modes" stacks: at the shared minimum size it is wider than the core hex
+    subs = "".join(f'<text class="sub f-opening-on" x="{cx}" y="{cy + dy}" text-anchor="middle">{s}</text>'
+                   for s, dy in (("chat agent", 14), ("modes", 33)))
     P.append(f'<g class="f-opening-core"><path class="hx f-opening-corehex" style="fill:url(#{pre}-core)" '
-             f'd="{hexpath(cx, cy, R + 2)}"/><circle class="f-opening-pulse" cx="{cx}" cy="{cy - 38}" r="3"/>'
-             f'<text class="f-opening-core1" x="{cx}" y="{cy + (2 if wide else -8)}" text-anchor="middle">MatAgent</text>'
+             f'd="{hexpath(cx, cy, core_r)}"/><circle class="f-opening-pulse" cx="{cx}" cy="{cy - 42}" r="3"/>'
+             f'<text class="f-opening-core1" x="{cx}" y="{cy - 8}" text-anchor="middle">MatAgent</text>'
              f'{subs}</g>')
     return "".join(P)
 
 
 def _art(x, y, w, h, i, tsize):
     _, _, _, _, title, sub, tag = CELLS[i]
-    tx, ty, sy, gy, dy = (x + 16, y + 24, y + 43, y + 20, y + 40) if tsize == "wide" else (x + 14, y + 21, y + 39, y + 19, y + 35)
+    tx, ty, sy, gy, dy = (x + 16, y + 24, y + 45, y + 21, y + 41) if tsize == "wide" else (x + 14, y + 22, y + 43, y + 20, y + 38)
     return (f'<g class="card f-opening-art"><rect x="{f(x)}" y="{f(y)}" width="{f(w)}" height="{f(h)}" rx="10"/>'
             f'<text class="ttl" x="{f(tx)}" y="{f(ty)}">{escape(title)}</text>'
             f'<text class="sub" x="{f(tx)}" y="{f(sy)}">{escape(sub)}</text>'
@@ -88,20 +89,20 @@ def _art(x, y, w, h, i, tsize):
 def _wide():
     W, H, cx, cy = 1100, 604, 550, 300
     P = [hdr(30, 44, "A QUESTION"), hdr(W - 30, 44, "WHAT COMES BACK", "end")]
-    P.append(_flower("opening-w", cx, cy, 74, 6, 232, 14, [("chat agent · modes", cy + 22)]))
+    P.append(_flower("opening-w", cx, cy, 76, 6, 78, 232, 14))
     # left: the question and the three ways in
     P.append(f'<g class="card f-opening-ask"><rect x="30" y="76" width="230" height="118" rx="12"/>{icon("chat", 46, 91)}'
              '<text class="tag" x="72" y="104">ILLUSTRATIVE</text>'
              f'<text class="f-opening-qt" x="46" y="138">{QUESTION[0]}</text><text class="f-opening-qt" x="46" y="160">{QUESTION[1]}</text>'
-             '<text class="sub" x="46" y="182">domain · ceramic</text></g>')
+             '<text class="sub" x="46" y="184">domain · ceramic</text></g>')
     ins = []
     for j, (ic, t, s) in enumerate(ASKS):
         y = 214 + j * 64
-        P.append(f'<g class="card f-opening-ask"><rect x="30" y="{y}" width="230" height="50" rx="10"/>{icon(ic, 46, y + 16)}'
-                 f'<text class="ttl" x="74" y="{y + 22}">{t}</text><text class="sub" x="74" y="{y + 39}">{escape(s)}</text></g>')
-        ins.append(curve(260, y + 25, cx - 248, cy, cls="cv f-opening-in", arrow=j == 1))
+        P.append(f'<g class="card f-opening-ask"><rect x="30" y="{y}" width="230" height="54" rx="10"/>{icon(ic, 46, y + 18)}'
+                 f'<text class="ttl" x="74" y="{y + 23}">{t}</text><text class="sub" x="74" y="{y + 42}">{escape(s)}</text></g>')
+        ins.append(curve(260, y + 27, cx - 248, cy, cls="cv f-opening-in", arrow=j == 1))
     P += ins
-    P.append(curve(260, 239, cx - 248, cy, cls="f-opening-flow f-opening-inflow", arrow=False).replace("/>", ' opacity="0"/>'))
+    P.append(curve(260, 241, cx - 248, cy, cls="f-opening-flow f-opening-inflow", arrow=False).replace("/>", ' opacity="0"/>'))
     P.append('<text class="lbl" x="264" y="226">asks</text>')
     # right: one artefact per cell, fanned out of the dial
     for i in range(6):
@@ -109,34 +110,34 @@ def _wide():
         P.append(curve(cx + 250, cy, W - 262, y + 29, cls="cv f-opening-out"))
         P.append(curve(cx + 250, cy, W - 262, y + 29, cls="f-opening-flow f-opening-outflow", arrow=False).replace("/>", ' opacity="0"/>'))
         P.append(_art(W - 260, y, 230, 58, i, "wide"))
-    P.append(legend(LEGEND, 30, H - 20) + _memkey(30 + 420, H - 20))
+    P.append(legend(LEGEND, 30, H - 20) + _memkey(30 + 492, H - 20))
     return svg(W, H, "".join(P), "wide", LABEL)
 
 
 def _narrow():
-    W, H, cx, cy = 360, 1104, 180, 480
+    W, H, cx, cy = 360, 1172, 180, 488
     P = [hdr(16, 22, "A QUESTION")]
-    P.append(f'<g class="card f-opening-ask"><rect x="16" y="34" width="328" height="88" rx="12"/>{icon("chat", 30, 48)}'
-             '<text class="tag" x="56" y="61">ILLUSTRATIVE</text><text class="sub" x="330" y="61" text-anchor="end">domain · ceramic</text>'
-             f'<text class="f-opening-qt" x="30" y="88">{QUESTION[0]}</text><text class="f-opening-qt" x="30" y="108">{QUESTION[1]}</text></g>')
+    P.append(f'<g class="card f-opening-ask"><rect x="16" y="34" width="328" height="92" rx="12"/>{icon("chat", 30, 49)}'
+             '<text class="tag" x="56" y="62">ILLUSTRATIVE</text><text class="sub" x="330" y="62" text-anchor="end">domain · ceramic</text>'
+             f'<text class="f-opening-qt" x="30" y="92">{QUESTION[0]}</text><text class="f-opening-qt" x="30" y="114">{QUESTION[1]}</text></g>')
     for j, (ic, t, s) in enumerate(ASKS):
-        y = 134 + j * 48
+        y = 138 + j * 48
         P.append(f'<g class="card f-opening-ask"><rect x="16" y="{y}" width="328" height="40" rx="10"/>{icon(ic, 28, y + 11)}'
                  f'<text class="ttl sm" x="54" y="{y + 25}">{t}</text>'
                  f'<text class="sub" x="330" y="{y + 25}" text-anchor="end">{escape(s)}</text></g>')
-    P.append(f'<path class="cv f-opening-in" d="M{cx},272 V{cy - 182}" marker-end="url(#arr)"/>'
-             f'<path class="f-opening-flow f-opening-inflow" d="M{cx},272 V{cy - 182}" opacity="0"/>'
-             f'<text class="lbl" x="{cx + 10}" y="292">asks</text>')
-    P.append(_flower("opening-n", cx, cy, 60, 4, 170, 8, [("chat agent", cy + 12), ("modes", cy + 29)]))
-    P.append(hdr(W - 16, 690, "WHAT COMES BACK", "end"))
-    top, ys = cy + 180, [704 + i * 58 for i in range(6)]
+    P.append(f'<path class="cv f-opening-in" d="M{cx},278 V{cy - 182}" marker-end="url(#arr)"/>'
+             f'<path class="f-opening-flow f-opening-inflow" d="M{cx},278 V{cy - 182}" opacity="0"/>'
+             f'<text class="lbl" x="{cx + 10}" y="298">asks</text>')
+    P.append(_flower("opening-n", cx, cy, 61, 3, 62, 170, 8))
+    P.append(hdr(W - 16, 700, "WHAT COMES BACK", "end"))
+    top, ys = cy + 180, [714 + i * 62 for i in range(6)]
     spine = f"M{cx},{top} C{cx},{top + 30} 24,{top + 16} 24,{top + 46}"
-    P.append(f'<path class="cv f-opening-out" d="{spine} V{ys[-1] + 25}"/>')
+    P.append(f'<path class="cv f-opening-out" d="{spine} V{ys[-1] + 27}"/>')
     for i, y in enumerate(ys):
-        P.append(f'<path class="cv f-opening-out" d="M24,{y + 25} H38" marker-end="url(#arr)"/>'
-                 f'<path class="f-opening-flow f-opening-outflow" d="{spine} V{y + 25} H38" opacity="0"/>')
-        P.append(_art(40, y, 304, 50, i, "narrow"))
-    P.append(legend(LEGEND[:1], 16, H - 30) + legend(LEGEND[1:], 16, H - 8) + _memkey(16 + 164, H - 8))
+        P.append(f'<path class="cv f-opening-out" d="M24,{y + 27} H38" marker-end="url(#arr)"/>'
+                 f'<path class="f-opening-flow f-opening-outflow" d="{spine} V{y + 27} H38" opacity="0"/>')
+        P.append(_art(40, y, 304, 54, i, "narrow"))
+    P.append(legend(LEGEND[:1], 16, H - 56) + legend(LEGEND[1:], 16, H - 32) + _memkey(16, H - 8))
     return svg(W, H, "".join(P), "narrow", LABEL)
 
 
@@ -185,7 +186,7 @@ JS = """MAFig.register("opening", function (root, variant) {
       .fromTo(ok, {scale: 1}, {scale: 1.5, transformOrigin: "50%% 50%%", duration: .15, yoyo: true, repeat: 1}, t + .72);
   });
   return {intro: intro, loop: loop};
-});""" % {"wcx": 550, "wcy": 300, "ncx": 180, "ncy": 480, "T": T, "R0": R0, "ANG": [c[0] for c in CELLS]}
+});""" % {"wcx": 550, "wcy": 300, "ncx": 180, "ncy": 488, "T": T, "R0": R0, "ANG": [c[0] for c in CELLS]}
 
 
 def build():

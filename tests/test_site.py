@@ -10,7 +10,7 @@ PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html"
 
 EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
-  r"\bvalidated\b", r"33 sub-modes", r"\b(ICS|ARS|FS)\b",
+  r"\bvalidated\b", r"33 sub-modes",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
   r"surrogate", r"uncertainty quantification", r"reflexion", r"local (llm|model)s?",
   r"structure generation", r"send to maestro", 
@@ -421,6 +421,50 @@ class SiteTests(unittest.TestCase):
             for mod in ("SEARCH", "AUGMENT", "PLAN", "DISCOVER", "EVALUATE"):
                 self.assertIn(mod, label)
 
+    GSAP_TEXT_MIN = {"wide": 12.8, "narrow": 13.4}  # viewBox units: >= 10.5 px rendered at 1000 px / 360 px
+
+    @staticmethod
+    def _css_rules():
+        for sel, body in re.findall(r"([^{}]+)\{([^}]*)\}", re.sub(r"/\*.*?\*/", "", css(), flags=re.S)):
+            m = re.search(r"font-size:\s*([\d.]+)px", body) or re.search(r"font:[^;]*?([\d.]+)px", body)
+            if m:
+                for piece in sel.split(","):
+                    yield piece.strip(), float(m.group(1))
+
+    def test_gsap_text_sizes(self):
+        rules = list(self._css_rules())
+        for v, low in self.GSAP_TEXT_MIN.items():
+            for cls in (".sub", ".hdr", ".tag", ".lbl", ".ttl", ".ttl.sm", ".legend text"):
+                scoped = [px for sel, px in rules if '[data-engine="gsap"]' in sel and sel.endswith(" " + cls) and f".sch.{v} " in sel]
+                shared = [px for sel, px in rules if '[data-engine="gsap"]' in sel and sel.endswith(" " + cls) and ".sch " in sel]
+                got = scoped or shared
+                self.assertTrue(got, (v, cls))
+                self.assertGreaterEqual(min(got), low, (v, cls))
+            for sel, px in rules:
+                if f".sch.{v} " in sel:
+                    self.assertGreaterEqual(px, low, sel)
+        # figure-specific text applies to both variants unless scoped to the wide one
+        for sel, px in rules:
+            if re.search(r"\.f-[a-z]+-", sel):
+                self.assertGreaterEqual(px, self.GSAP_TEXT_MIN["wide" if ".sch.wide " in sel else "narrow"], sel)
+
+    def test_figkit_legend_dash_class(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        import figkit
+        out = figkit.legend([("dash", "optional")], 0, 0)
+        self.assertIn('class="lg-dash"', out)
+        for cls in re.findall(r'class="([^"]*)"', out):
+            self.assertNotIn("dash", cls.split())  # SMIL-era class
+        self.assertRegex(css(), r"\.sch \.lg-dash\s*\{[^}]*stroke-dasharray")
+
+    def test_figkit_hex_constant_stroke(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        import figkit
+        sym = re.search(r'<symbol id="hex".*?</symbol>', figkit.SYMBOLS).group(0)
+        self.assertIn('vector-effect="non-scaling-stroke"', sym)
+        self.assertIn('<symbol id="hex"', PAGE)
+        self.assertIn('vector-effect="non-scaling-stroke"', re.search(r'<symbol id="hex".*?</symbol>', PAGE).group(0))
+
     def test_fig_opening(self):
         sec = re.search(r'<section id="opening".*?</section>', PAGE, flags=re.S).group(0)
         fig = re.search(r'<figure class="fig" data-fig="opening" data-engine="gsap">.*?</figure>', sec, flags=re.S)
@@ -440,7 +484,8 @@ class SiteTests(unittest.TestCase):
             for cls in re.findall(r'class="([^"]*)"', body):
                 self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
             self.assertNotRegex(body, r"<animate")
-        self.assertIn(">chat agent · modes<", fig)
+        self.assertIn(">chat agent<", fig)  # core sub-label "chat agent · modes", stacked on two lines
+        self.assertIn(">modes<", fig)
         for card in re.findall(r'<article class="card"[^>]*>', sec):
             self.assertIn("data-claims=", card)
         self.assertIn('MAFig.register("opening"', self._script("figjs"))

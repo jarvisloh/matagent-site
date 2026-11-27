@@ -37,7 +37,7 @@ ICONS = {
 # Hidden shared defs: one <symbol id="i-<name>"> per icon (18x18), the hexagon (r = 10) and the tick, and the arrowhead.
 SYMBOLS = (
     "".join(f'<symbol id="i-{n}" viewBox="0 0 18 18" width="18" height="18" overflow="visible">{d}</symbol>' for n, d in ICONS.items())
-    + f'<symbol id="hex" viewBox="-10 -10 20 20" width="20" height="20" overflow="visible"><path d="{hexpath(0, 0, 10)}"/></symbol>'
+    + f'<symbol id="hex" viewBox="-10 -10 20 20" width="20" height="20" overflow="visible"><path d="{hexpath(0, 0, 10)}" vector-effect="non-scaling-stroke"/></symbol>'
     + '<symbol id="chk" viewBox="0 0 12 12" width="12" height="12" overflow="visible"><path d="M2.5 6.4 5 8.8 9.6 3.4"/></symbol>'
     + '<marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
     '<path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)"/></marker>'
@@ -78,16 +78,16 @@ _SWATCH = {
     "flow": lambda x: f'<path d="M{x},-4 h22" class="lg-flow"/>',
     "amber": lambda x: f'<path d="M{x},-4 h22" class="lg-amber"/>',
     "dot": lambda x: f'<circle cx="{x + 4}" cy="-4" r="4" class="lg-dot"/>',
-    "dash": lambda x: f'<path d="M{x},-4 h22" class="cv dash"/>',
+    "dash": lambda x: f'<path d="M{x},-4 h22" class="lg-dash"/>',
 }
 
 
 def legend(items, x, y):
-    """Legend row of (swatch_kind, text); advances by an estimated text width (11 px mono ~ 6.6 px/char)."""
+    """Legend row of (swatch_kind, text); advances by an estimated text width (13.4-unit mono ~ 8.1 units/char)."""
     out, cx = [], 0
     for kind, text in items:
         out.append(_SWATCH[kind](cx) + f'<text x="{cx + 30}" y="0">{escape(text)}</text>')
-        cx += 30 + int(len(text) * 6.6) + 22
+        cx += 30 + int(len(text) * 8.1) + 22
     return f'<g class="legend" transform="translate({f(x)},{f(y)})">{"".join(out)}</g>'
 
 
