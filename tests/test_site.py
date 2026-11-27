@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = (ROOT / "index.html").read_text(encoding="utf-8") if (ROOT / "index.html").exists() else ""
 
-EXPECTED_SECTIONS = ["opening", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
+EXPECTED_SECTIONS = ["opening", "modules", "literature", "gaps", "hypotheses", "planning", "domains", "record", "improvement", "interfaces", "contact"]
 FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|ed|ing)? new materials",
   r"\bvalidated\b", r"33 sub-modes",
   r"recall@\d\s*(=|:|of)", r"win rate", r"hits@", r"\bMRR\b", r"bayesian optimi[sz]", r"active learning",
@@ -507,6 +507,40 @@ class SiteTests(unittest.TestCase):
         js = re.search(r'MAFig\.register\("opening".*?<!-- figjs:opening:end -->', self._script("figjs"), flags=re.S)
         self.assertTrue(js)
         self.assertNotIn("scrub", js.group(0))
+
+    def test_fig_modules(self):
+        self.assertEqual(EXPECTED_SECTIONS.index("modules"), EXPECTED_SECTIONS.index("opening") + 1)
+        sec = re.search(r'<section id="modules".*?</section>', PAGE, flags=re.S)
+        self.assertTrue(sec)
+        sec = sec.group(0)
+        self.assertIn("<h2>Five modules, four capability groups</h2>", sec)
+        fig = re.search(r'<figure class="fig" data-fig="modules" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            m = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S)
+            self.assertTrue(m, v)
+            label = re.search(r'aria-label="([^"]*)"', re.search(r'<svg class="sch %s"[^>]*>' % v, fig).group(0))
+            self.assertTrue(label and len(label.group(1)) >= 20, v)
+            for mod in ("SEARCH", "PLAN", "AUGMENT", "DISCOVER", "EVALUATE"):
+                self.assertIn(mod, label.group(1), (v, mod))
+            body = m.group(1)
+            self.assertIn('class="legend"', body, v)
+            self.assertEqual(body.count('class="f-modules-cell"'), 5, v)
+            for mod in ("EARCH", "LAN", "UGMENT", "ISCOVER", "VALUATE"):
+                self.assertIn(mod, body, (v, mod))
+            for score in ("GCS", "FS", "RCS", "ICS", "ARS", "HFS"):
+                self.assertIn(">%s<" % score, body, (v, score))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat")
+        cards = re.findall(r'<article class="card"[^>]*>', sec)
+        self.assertEqual(len(cards), 4)  # the four capability groups
+        for card in cards:
+            self.assertIn("data-claims=", card)
+        js = re.search(r'MAFig\.register\("modules".*?<!-- figjs:modules:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertRegex(js.group(0), r"\{scrub: true\}\);\s*<!-- figjs:modules:end -->")
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
