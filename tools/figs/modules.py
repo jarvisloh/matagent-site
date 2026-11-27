@@ -121,7 +121,7 @@ def _narrow():
 
 
 STEP = 0.9   # seconds between modules in the intro
-DONE = 0.55  # share of the wide scrub range by which every callout has written in
+WIDE_ORDER = [i for i in range(5) if i % 2 == 0] + [i for i in range(5) if i % 2]  # upper row, then lower row
 
 JS = """MAFig.register("modules", function (root, variant) {
   var wide = variant === "wide";
@@ -131,10 +131,11 @@ JS = """MAFig.register("modules", function (root, variant) {
   var intro = gsap.timeline({defaults: {ease: "power2.out"}});
   intro.from(q(".hdr"), {opacity: 0, duration: .4}, 0)
     .from(q(".f-modules-ghost, .f-modules-rail"), {opacity: 0, duration: .6}, 0);
-  // one module after another, in slide order: the hex settles, lights, its leader draws and its callout writes in.
-  // wide: scrubbed by scroll (the runtime ties this timeline to the figure's scroll range); narrow: plays once.
-  cells.forEach(function (c, i) {
-    var t = .3 + i * %(step)s, up = wide ? i %% 2 === 0 : false;
+  // one module after another: the hex settles, lights, its leader draws and its callout writes in.
+  // wide: scrubbed by scroll, so the upper row (callouts above) goes first and the lower row follows as it scrolls into
+  // view; narrow: plays once, top to bottom.
+  (wide ? %(wide_order)s : [0, 1, 2, 3, 4]).forEach(function (i, n) {
+    var c = cells[i], t = .3 + n * %(step)s, up = wide ? i %% 2 === 0 : false;
     intro.from(c, {opacity: 0, scale: .72, transformOrigin: "50%% 50%%", duration: .5}, t)
       .from(c.querySelector(".f-modules-lit"), {opacity: 0, duration: .4}, t + .3)
       .from(dots[i], {scale: 0, transformOrigin: "50%% 50%%", duration: .2}, t + .45)
@@ -143,11 +144,11 @@ JS = """MAFig.register("modules", function (root, variant) {
       .from(wipes[i], {attr: {width: 0}, duration: .55, ease: "power1.inOut"}, t + .8);
   });
   intro.from(q(".legend"), {opacity: 0, duration: .4}, .3 + 4.5 * %(step)s);
-  // the scrub range ends when the figure's bottom reaches 45%% of the viewport, by which time its top row has left the
-  // screen; an empty hold makes every callout finish by %(done)s of the range, while the whole figure is still in view
-  if (wide) intro.set({}, {}, intro.duration() / %(done)s);
+  // last, the section's capability-group cards stagger in (static HTML stays visible without JS or with reduced motion)
+  var groups = gsap.utils.toArray(root.closest("section").querySelectorAll(".cards .card"));
+  intro.from(groups, {opacity: 0, y: 16, duration: .4, stagger: .15}, ">");
   return {intro: intro};
-}, {scrub: true});""" % {"step": STEP, "done": DONE}
+}, {scrub: true});""" % {"step": STEP, "wide_order": WIDE_ORDER}
 
 
 def build():

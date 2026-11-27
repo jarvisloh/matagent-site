@@ -326,6 +326,12 @@ class SiteTests(unittest.TestCase):
             self.assertIn("(prefers-reduced-motion: no-preference)", q)
             self.assertIn(q, rt)
 
+    def test_runtime_scrub_range(self):
+        # the whole scrub range plays while the figure is on screen; never pinned
+        rt = self._script("figrt")
+        self.assertRegex(rt, r'start: "top 80%", end: "center 45%", scrub: 0\.6')
+        self.assertNotIn("pin:", rt)
+
     def test_no_color_tweens(self):
         for sid in ("figjs", "figrt"):
             self.assertIsNone(re.search(r"[{,]\s*[\"']?(fill|stroke|color|backgroundColor)[\"']?\s*:", self._script(sid)), sid)
@@ -541,6 +547,8 @@ class SiteTests(unittest.TestCase):
         js = re.search(r'MAFig\.register\("modules".*?<!-- figjs:modules:end -->', self._script("figjs"), flags=re.S)
         self.assertTrue(js)
         self.assertRegex(js.group(0), r"\{scrub: true\}\);\s*<!-- figjs:modules:end -->")
+        self.assertIn('closest("section").querySelectorAll(".cards .card")', js.group(0))  # group cards stagger in
+        self.assertNotIn("intro.set({}, {}", js.group(0))  # no per-figure hold; the shared range fits
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
