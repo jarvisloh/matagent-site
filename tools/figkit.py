@@ -32,6 +32,7 @@ ICONS = {
     "chat": '<path d="M3 3.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 15 12.5H8l-3.5 3v-3H3A1.5 1.5 0 0 1 1.5 11V5A1.5 1.5 0 0 1 3 3.5z"/>',
     "chain": '<rect x="1.5" y="6" width="5" height="5" rx="1.2"/><rect x="11.5" y="6" width="5" height="5" rx="1.2"/><path d="M6.5 8.5h5"/>',
     "plug": '<path d="M6.5 2v4M11.5 2v4M4 6h10v3.5a5 5 0 0 1-10 0zM9 14.5V17"/>',
+    "upload": '<path d="M2.5 11.5v3.5h13v-3.5M9 12.5V2.5M5.5 6 9 2.5 12.5 6"/>',
     # the ten material domains
     "dm-catalyst": '<path d="M2 15.5h14"/><circle cx="5.5" cy="11.8" r="2.2"/><circle cx="12.5" cy="11.8" r="2.2"/><path d="M9 7.5V2.5M7 4.5l2-2 2 2"/>',
     "dm-semiconductor": '<path d="M2 3.5h14M2 14.5h14"/><path d="M9 12.5v-6M7 8.5l2-2 2 2"/>',

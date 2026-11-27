@@ -1055,6 +1055,69 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    def test_fig_interfaces(self):
+        import html
+        sec = re.search(r'<section id="interfaces".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Data and interfaces</h2>", sec)
+        self.assertIn('<p class="kicker">12</p>', sec)
+        self.assertEqual(EXPECTED_SECTIONS.index("interfaces"), EXPECTED_SECTIONS.index("improvement") + 1)
+        fig = re.search(r'<figure class="fig" data-fig="interfaces" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        self.assertNotRegex(html.unescape(re.sub(r"<[^>]+>", " ", sec)) + fig, r"VASP|[Vv]alidat")  # MCP copy never names VASP
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig)
+            self.assertTrue(tag, v)
+            label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            self.assertGreaterEqual(len(label), 20)
+            for word in ("Materials Project", "MPEA", "PolyMetriX", "Open Catalyst", "download", "upload", "template",
+                         "language model", "review", "checks", "KC", "chat", "MCP", "ten tools", "person confirms",
+                         "illustrative"):
+                self.assertIn(word, label, (v, word))
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            shown = html.unescape(" ".join(re.sub(r"<[^>]+>", "", t) for t in re.findall(r"<text[^>]*>(.*?)</text>", body)))
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the database core
+            for want in ("Materials Project", "MPEA", "PolyMetriX", "Open Catalyst", "Uploads", "Papers", "template",
+                         "language model", "DATABASE", "CatPlat", "MatPlat", "Chat", "MCP", "ten tools", "MAP",
+                         "REVIEW", "CHECK", "a person confirms", "50 MiB"):
+                self.assertIn(want, shown, (v, want))
+            # six sources on the orbit, two records each; every record docks into its own slot
+            self.assertEqual(len(re.findall(r'<g class="f-interfaces-src"', body)), 6, v)
+            self.assertEqual(len(re.findall(r'class="f-interfaces-pk"', body)), 12, v)
+            self.assertEqual(body.count('data-e="dock"'), 12, v)
+            self.assertEqual(len(set(re.findall(r'class="f-interfaces-gate (tpl|lm|kc)"', body))), 3, v)  # three mapping kinds
+            # causality: per source, a record is mapped, reviewed (not KC), checked, then docked
+            ev = {}
+            for e, t, i in re.findall(r'data-e="(\w+)" data-t="([\d.]+)"(?: data-i="(\d)")?', body):
+                ev.setdefault((e, i), []).append(float(t))
+            first, last = (lambda e, i="": min(ev[(e, i)])), (lambda e, i="": max(ev[(e, i)]))
+            kc = [i for e, i in ev if e == "xtr"]
+            self.assertEqual(len(kc), 1, v)
+            for i in "012345":
+                steps = ["lit", "xtr" if i in kc else "map"] + ([] if i in kc else ["wait", "rev"]) + ["chk", "dock"]
+                for a, b in zip(steps, steps[1:]):
+                    self.assertLess(last(a, i), first(b, i), (v, i, a, b))
+            self.assertLess(last("chat"), first("lit", re.search(r'data-e="chat"[^>]*data-s="(\d)"', body).group(1)), v)
+            self.assertLess(last("mcp"), first("cwait"), v)
+            self.assertLess(last("cwait"), first("conf"), v)
+            self.assertLess(last("conf"), first("lit", re.search(r'data-e="conf"[^>]*data-s="(\d)"', body).group(1)), v)
+            self.assertLess(max(t for (e, i), ts in ev.items() if e == "dock" for t in ts), first("count"), v)
+            self.assertLess(last("count"), first("query"), v)
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl", "box", "port"} & set(cls.split()), (v, cls))
+            self.assertNotIn("<animate", body)
+            self.assertNotIn("{", body)
+        self.assertRegex(css(), r"\.f-interfaces-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
+        for cid in ("C33", "C34", "C35", "C36", "C37", "C38", "C50", "C73", "C74", "C75"):
+            self.assertIn(cid, allc)
+        js = re.search(r'MAFig\.register\("interfaces".*?<!-- figjs:interfaces:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
         p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"
