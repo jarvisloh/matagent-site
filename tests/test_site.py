@@ -18,7 +18,7 @@ FORBIDDEN = [r"\bautonomous", r"self-driving", r"closed[- ]loop", r"discover(s|e
 
 TOKENS = {
     "light": {"bg": "#F6F8FB", "dot": "#D5DDE8", "ink": "#0B1220", "muted": "#4B5970",
-              "line": "#C3CEDC", "line-strong": "#8C9AB0", "panel": "#0f1622", "node": "#FFFFFF", "accent": "#0E7F78", "accent-2": "#9A600E"},
+              "line": "#C3CEDC", "line-strong": "#8C9AB0", "panel": "#0f1622", "panel-ink": "#EAF2F8", "panel-muted": "#8FA3BC", "node": "#FFFFFF", "accent": "#0E7F78", "accent-2": "#9A600E"},
     "dark": {"bg": "#0A0F1A", "dot": "#1A2538", "ink": "#E6EDF5", "muted": "#8A97AB",
              "line": "#24324A", "line-strong": "#4A5B78", "node": "#101A2B", "accent": "#4FD1C5", "accent-2": "#F5B544"},
 }
@@ -97,6 +97,10 @@ class SiteTests(unittest.TestCase):
                 for bg in ("bg", "node"):
                     self.assertGreaterEqual(contrast(t[fg], t[bg]), 4.5, f"{theme} {fg} on {bg}")
             self.assertGreaterEqual(contrast(t["bg"], t["accent"]), 4.5, f"{theme} bg on accent")
+        # the dark focal panel keeps its own ink in both themes (defined once on :root)
+        light = tokens("light")
+        for fg in ("panel-ink", "panel-muted"):
+            self.assertGreaterEqual(contrast(light[fg], light["panel"]), 4.5, fg)
 
     def test_theme_selectors(self):
         self.assertTrue(tokens("dark"))
@@ -326,6 +330,17 @@ class SiteTests(unittest.TestCase):
         for sid in ("figjs", "figrt"):
             self.assertIsNone(re.search(r"[{,]\s*[\"']?(fill|stroke|color|backgroundColor)[\"']?\s*:", self._script(sid)), sid)
 
+    def test_fromto_keys_in_to_vars(self):
+        # a key only in fromTo's from-vars is applied through startAt, which a rewind (every loop wrap) reverts and
+        # the next pass does not re-apply; so every from-key must also be in the to-vars
+        obj = r"\{((?:[^{}]|\{[^{}]*\})*)\}"
+        found = 0
+        for frm, to in re.findall(r"\.fromTo\([^,]+,\s*" + obj + r",\s*" + obj, self._script("figjs")):
+            keys = lambda body: set(re.findall(r"(\w+)\s*:", re.sub(r"\{[^{}]*\}", "", body)))
+            self.assertLessEqual(keys(frm), keys(to), (frm, to))
+            found += 1
+        self.assertTrue(found)
+
     def test_gsap_figs_registered(self):
         figs = set(re.findall(r'<figure class="fig" data-fig="([^"]+)" data-engine="gsap"', PAGE))
         regs = set(re.findall(r'MAFig\.register\("([^"]+)"', self._script("figjs")))
@@ -415,7 +430,7 @@ class SiteTests(unittest.TestCase):
         # plain words, no mode codes or version-like numbers; MatOS routing is not claimed (C42)
         self.assertNotRegex(shown, r"\b(LCA|HF|CDTP|GAR|MMR)\b|\d\.\d|[Vv]alidat")
         self.assertNotIn("MatOS", fig)
-        for want in ("Ranked papers", "Cited answers", "Study design", "New modules", "Run scores", "Run record"):
+        for want in ("Ranked papers", "Cited answers", "Study plan", "New modules", "Run scores", "Run record"):
             self.assertIn(want, shown)
         for label in re.findall(r'aria-label="([^"]*)"', fig):
             for mod in ("SEARCH", "AUGMENT", "PLAN", "DISCOVER", "EVALUATE"):
@@ -489,7 +504,9 @@ class SiteTests(unittest.TestCase):
         for card in re.findall(r'<article class="card"[^>]*>', sec):
             self.assertIn("data-claims=", card)
         self.assertIn('MAFig.register("opening"', self._script("figjs"))
-        self.assertNotIn("scrub", re.search(r'MAFig\.register\("opening".*', self._script("figjs"), flags=re.S).group(0))
+        js = re.search(r'MAFig\.register\("opening".*?<!-- figjs:opening:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
 
     def test_header_cta_breakpoint(self):
         m = re.search(r"@media \(max-width: (\d+)px\) \{ \.site-header \.btn-primary \{ display: none; \} \}", css())
