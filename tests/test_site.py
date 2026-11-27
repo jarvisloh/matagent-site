@@ -987,6 +987,61 @@ class SiteTests(unittest.TestCase):
         self.assertNotIn("scrub", js.group(0))
         self.assertIn("loop", js.group(0))
 
+    def test_fig_improvement(self):
+        import html
+        sec = re.search(r'<section id="improvement".*?</section>', PAGE, flags=re.S).group(0)
+        self.assertIn("<h2>Improves and extends itself</h2>", sec)
+        self.assertIn('<p class="kicker">11</p>', sec)
+        fig = re.search(r'<figure class="fig" data-fig="improvement" data-engine="gsap">.*?</figure>', sec, flags=re.S)
+        self.assertTrue(fig)
+        fig = fig.group(0)
+        for v in ("wide", "narrow"):
+            tag = re.search(r'<svg class="sch %s"[^>]*>' % v, fig)
+            self.assertTrue(tag, v)
+            label = html.unescape(re.search(r'aria-label="([^"]*)"', tag.group(0)).group(1))
+            self.assertGreaterEqual(len(label), 20)
+            for word in ("baseline", "top third", "holdout", "margin", "administrator", "git branch", "macOS only",
+                         "registry", "PyPI", "GitHub", "isolated runner", "not that it is correct", "staging", "ARS",
+                         "OpenEvolve", "five island", "0.3 tests", "Anthropic API key", "illustrative"):
+                self.assertIn(word, label, (v, word))
+            self.assertNotRegex(label, r"[Mm]igrat|500")  # not claimed (C71)
+            body = re.search(r'<svg class="sch %s"[^>]*>(.*?)</svg>' % v, fig, flags=re.S).group(1)
+            shown = html.unescape(" ".join(re.sub(r"<[^>]+>", "", t) for t in re.findall(r"<text[^>]*>(.*?)</text>", body)))
+            self.assertIn('class="legend"', body, v)
+            self.assertIn("values are illustrative", body, v)
+            self.assertEqual(body.count('class="panel'), 1, v)  # one dark focal panel: the module bench
+            self.assertEqual(len(re.findall(r'class="f-improvement-pl"[^>]*>[ab]<', body)), 2, v)  # panels a and b
+            for want in ("Baseline", "12 candidates", "Holdout", "Approval", "Active", "git branch", "registry", "PyPI",
+                         "GitHub", "syntax", "imports", "types", "lint", "contract", "tests", "security", "Staging",
+                         "ISOLATED RUNNER", "FITNESS", ".3", ".15", "50 iterations"):
+                self.assertIn(want, shown, (v, want))
+            # (a) 12 candidates; the top third go to stage 2; three take holdout CIs; exactly one clears
+            cands = re.findall(r'<g class="f-improvement-cand" data-k="(\d)"', body)
+            self.assertEqual(len(cands), 12, v)
+            self.assertEqual([cands.count(k) for k in "012"], [8, 1, 3], v)
+            self.assertEqual(body.count('class="f-improvement-ci'), 3, v)
+            self.assertEqual(body.count('class="f-improvement-ci ok"'), 1, v)
+            self.assertEqual(len(re.findall(r'<g class="f-improvement-isle"', body)), 5, v)
+            # causality: reveal times (data-t, seconds into a pass) follow the step that decides them
+            t = {k: float(s) for k, s in re.findall(r'data-e="([\w-]+)" data-t="([\d.]+)"', body)}
+            for a, b in (("base", "cand"), ("cand", "on"), ("on", "ci"), ("ci", "halo"), ("halo", "wait"), ("wait", "ok"),
+                         ("ok", "active"), ("lib", "code"), ("code", "chk"), ("chk", "tests"), ("tests", "staged"),
+                         ("tests", "evid"), ("evid", "fill"), ("fill", "read"), ("prog", "best")):
+                self.assertLess(t[a], t[b], (v, a, b))
+            for cls in re.findall(r'class="([^"]*)"', body):
+                self.assertFalse({"node", "edge", "dash", "particle", "hl"} & set(cls.split()), (v, cls))
+            self.assertNotRegex(body, r"<animate|[Vv]alidat|[Mm]igrat")
+            self.assertNotIn("{", body)
+        self.assertRegex(css(), r"\.f-improvement-[\w-]+[^{]*\{[^}]*pointer-events:\s*none")
+        allc = " ".join(re.findall(r'<article class="card"[^>]*>', sec))
+        for cid in ("C30", "C31", "C32", "C48", "C54", "C67", "C69", "C70", "C71"):
+            self.assertIn(cid, allc)
+        self.assertNotRegex(html.unescape(re.sub(r"<[^>]+>", " ", sec)), r"[Vv]alidat|[Mm]igrat")
+        js = re.search(r'MAFig\.register\("improvement".*?<!-- figjs:improvement:end -->', self._script("figjs"), flags=re.S)
+        self.assertTrue(js)
+        self.assertNotIn("scrub", js.group(0))
+        self.assertIn("loop", js.group(0))
+
     def test_claims_ids_unique(self):
         # parse_claims keeps the last row per ID, so a clash between sessions would pass test_claims_statuses
         p = Path(os.environ.get("CATAGENT_REPO", str(ROOT.parent / "CATAGENT"))) / "docs" / "site" / "claims.md"
